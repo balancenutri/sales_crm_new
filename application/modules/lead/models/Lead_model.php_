@@ -1,0 +1,1218 @@
+<?php defined('BASEPATH') OR exit('No direct script access allowed');
+
+class Lead_model extends CI_Model
+{
+    public function __construct() 
+    {
+        parent::__construct(); 
+        // $this->load->library('query');
+    }
+    
+    public function get_lead_details_data_query($get_parameters)
+    {
+        
+        // echo "<pre>";
+        // print_r($get_parameters);
+        // exit;
+        /* function get_lead_details_data_query : starts here */
+        // https://www.balancenutrition.in/sales_crm/lead?lead_by=all&search=name&df=2021-03-18&dt=2021-03-19&agf=20&agt=35
+        //lead_by => show lead
+        //search => search string
+        //df  => date from
+        //dt   => date to
+        //agf  => age from
+        //agt => age to
+        // echo "<pre>";
+        // print_r($get_parameters);
+        // exit;
+        
+        // (
+        //                 CASE WHEN lm.gender != '' THEN CONCAT(lm.gender,' | ',lm.age,' yrs') ELSE 'NA'
+        //             END
+        //         ) as gender,
+        // echo $get_parameters['lead_by'];
+        // exit;
+        $where = '';$sale_condition=0; 
+        $name = $_SESSION['balance_session']['first_name'];
+        //Added By Navin Start
+        $whrClause = "";
+        $stage_count = intval(@$get_parameters['stage']);
+        if($stage_count != 0){
+            switch($stage_count){      
+                case 1:      
+                    $whrClause = "  lm.stage = 1 AND ";     
+                    break;      
+                case 2:      
+                    $whrClause = "  lm.stage = 2 AND ";       
+                    break;      
+                case 3:      
+                    $whrClause = "  lm.stage = 3 AND ";    
+                    break; 
+                case 4:      
+                    $whrClause = "  lm.stage = 4 AND ";    
+                    break; 
+                default:      
+                    $whrClause = "";     
+            }//switch($stage_count){
+        }else{
+            $whrClause = "";
+        }//if($stage_count != 0){
+        //Added By Navin END
+    // BS leads
+        if(!empty($get_parameters) && !empty($get_parameters['lead_by']) && $get_parameters['lead_by']=='bs'){
+            //echo $get_parameters['bs_assign'];exit;
+            if(@$get_parameters['bs_assign']=='0'){ //echo 'if:';exit;
+                $where_condition = " AND od.email_id IN(SELECT email FROM lead_action WHERE LCASE(`assign_to`) = '".strtolower($name)."' GROUP BY email) ";
+            }else{
+                $where_condition = " AND od.email_id NOT IN(SELECT email FROM lead_action WHERE `assign_to` != '' GROUP BY email) ";
+            }
+
+            if(!empty($get_parameters['dys'])){
+                if($get_parameters['dys']==7){
+                    $days_between = " DATE(od.date) BETWEEN (CURDATE() - INTERVAL 7 DAY) AND CURDATE() AND ";
+                }elseif($get_parameters['dys']==15){
+                    $days_between = " DATE(od.date) BETWEEN (CURDATE() - INTERVAL 15 DAY) AND (CURDATE() - INTERVAL 7 DAY) AND ";
+                }elseif($get_parameters['dys']==30){
+                    $days_between = " DATE(od.date) BETWEEN (CURDATE() - INTERVAL 30 DAY) AND (CURDATE() - INTERVAL 15 DAY) AND ";
+                }elseif($get_parameters['dys']==90){
+                    $days_between = " DATE(od.date) BETWEEN (CURDATE() - INTERVAL 90 DAY) AND (CURDATE() - INTERVAL 30 DAY) AND ";
+                }
+            }else{
+                $days_between = " DATE(od.date) >= (CURDATE() - INTERVAL 90 DAY) AND ";
+            }
+            $sql= "SELECT CONCAT(rg.first_name,' ',rg.last_name) as name,lm.enquiry_from AS lead_source,lm.status AS lead_status,
+                        CONCAT(lm.fname, ' ', lm.lname) AS name,
+                                (
+                                        CASE WHEN lm.gender != '' THEN lm.gender ELSE 'NA'
+                                    END
+                                ) AS gender,
+                                (
+                                    CASE WHEN lm.age != '' THEN CONCAT(lm.age, ' yrs') ELSE 'NA'
+                                END
+                                ) AS lead_age,
+                                (
+                                    CASE WHEN lm.height != '' THEN CONCAT(lm.height,'.',lm.inch) ELSE 'NA'
+                                END
+                                ) AS height,
+                                mobile_verified AS verify,
+                                DATE_FORMAT(lm.created, '%D %b %Y') AS created_date,
+                                rg.phone,userid,od.email_id as email,program_name,prog_duration,
+                                (SELECT TRUNCATE(SUM(diffrence),2) as diff FROM `weight_monitor_record` where order_id =od.order_id) wt_diff,
+                            (select full_name from admin_user where admin_id=rg.mentor_id)as mentor,
+                            (select assign_to from lead_action where email=lm.email GROUP by email)as assign_to 
+            FROM `order_details` od 
+            LEFT JOIN registries rg ON od.userid=rg.id 
+            LEFT JOIN lead_management lm ON od.email_id = lm.email      
+            WHERE ".$whrClause." ".$days_between." `program_type`=1 and od.email_id !='' 
+            AND od.email_id not in (select email_id from order_details where `program_type`=0 GROUP by email_id)
+            ".$where_condition." GROUP by od.email_id ";
+            //echo $sql;
+            $query=$this->db->query($sql);
+        
+            // echo "<pre>";
+            // print_r($query->result_array());
+            // exit;
+    
+            if($query->num_rows()>0)
+            {
+                return $query->result_array();
+            }else{
+                return [];
+            }
+            exit;
+        }
+ // LEAD and OMR     
+        if(!empty($get_parameters['completed'])){
+            $sale_condition=3;
+            $whr_completed = "AND lm.email IN(
+                            SELECT
+                                email_id
+                            FROM
+                                order_details
+                        )";
+        }else{
+            $whr_completed = "";
+        }  
+        if(!empty($get_parameters) && !empty($get_parameters['lead_by'])){
+            
+            switch($get_parameters['lead_by']){
+                case 'lds_avlble_tdy':       $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.email not in ( SELECT lms.email FROM lead_management lms,lead_action las WHERE lms.email=las.email and DATE(lms.created) = CURDATE() and las.assign_to !='' GROUP BY lms.email ) AND DATE(lm.created) = CURDATE() ";
+                                             $sale_condition=1;
+                                             break;
+                case 'lds_avlble_mnth':      $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.email not in ( SELECT lms.email FROM lead_management lms,lead_action las WHERE lms.email=las.email and DATE(lms.created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND DATE(lm.created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') and las.assign_to !='' GROUP BY lms.email ) ";//
+                                             $sale_condition=1;
+                                             break;
+                case 'frsh_lds_avlble_tdy':  $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.stage='".$get_parameters['stage']."' AND lm.id NOT IN (SELECT id FROM lead_management ldm WHERE (SELECT DATE(created) FROM lead_management WHERE email = ldm.email AND id != ldm.id ORDER BY id DESC LIMIT 1) < (DATE(ldm.created) - INTERVAL 30 DAY) AND ldm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01')) AND DATE(lm.created) = CURDATE() ";
+                                             $sale_condition=1;                
+                                             break;
+                case 'old_lds_avlble_tdy':   $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.stage='".$get_parameters['stage']."' AND (SELECT DATE(created) FROM lead_management WHERE email = lm.email AND id != lm.id ORDER BY id DESC LIMIT 1) < (DATE(lm.created) - INTERVAL 30 DAY) AND DATE(lm.created) = CURDATE() ";
+                                             $sale_condition=1;
+                                             break;
+                case 'frsh_lds_avlble_mnth': $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.stage='".$get_parameters['stage']."' AND lm.id NOT IN (SELECT id FROM lead_management ldm WHERE (SELECT DATE(created) FROM lead_management WHERE email = ldm.email AND id != ldm.id ORDER BY id DESC LIMIT 1) < (DATE(ldm.created) - INTERVAL 30 DAY) AND ldm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01'))  ";//AND lm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                                             $sale_condition=1;
+                                             break;
+                case 'old_lds_avlble_mnth':  $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.stage='".$get_parameters['stage']."' AND (SELECT DATE(created) FROM lead_management WHERE email = lm.email AND id != lm.id ORDER BY id DESC LIMIT 1) < (DATE(lm.created) - INTERVAL 30 DAY)  ";//AND lm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                                             $sale_condition=1;
+                                             break;
+                case 'avlble_omr_tdy':       $where = " DATE(lm.created) = CURDATE() AND lm.phone !='' AND CHAR_LENGTH(lm.phone) > 4 AND lm.email IN (select email_id from order_details where program_status NOT IN(0,1,2,4)) AND lm.email NOT IN (select email_id from order_details where program_status IN ('1','4')) AND la.assign_date < (select DATE(created) from lead_management where email=lm.email order by id desc limit 1) ";
+                                             break;
+                case 'avlble_omr_mnth':      $where = " lm.phone !='' AND CHAR_LENGTH(lm.phone) > 4 AND lm.email IN (select email_id from order_details where program_status NOT IN(0,1,2,4)) AND lm.email NOT IN (select email_id from order_details where program_status IN ('1','4')) AND la.assign_date < (select DATE(created) from lead_management where email=lm.email order by id desc limit 1) ";//DATE(lm.created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND 
+                                             break;                             
+                case 'assgn_self_tdy':       $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(la.assign_from) IN ('".strtolower($name)."','') AND DATE(la.assign_date) = CURDATE()  ";
+                                             break;
+                case 'assgn_self_mnth':      $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(la.assign_from) IN ('".strtolower($name)."','') ".$whr_completed;//AND la.assign_date > DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                                             break;
+                case 'assgn_by_othrs_tdy':   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(la.assign_from) NOT IN('".strtolower($name)."','') AND DATE(la.assign_date) = CURDATE()  ";
+                                             break;
+                case 'assgn_by_othrs_mnth':  $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(la.assign_from) NOT IN('".strtolower($name)."','')  ".$whr_completed;//AND la.assign_date > DATE_FORMAT(CURDATE(), '%Y-%m-01') 
+                                             break;
+                case 'self_fu_tdy':          $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND DATE(la.fu_date) = CURDATE()  ";
+                                             break;
+                case 'self_fu_mnth':         $where = " (LCASE(la.assign_to) ='".strtolower($name)."' OR LCASE(la.fu_assigned) ='".strtolower($name)."')  ".$whr_completed;//AND DATE(la.fu_date) > DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                                             break;
+                case 'self_cnsltn_tdy':      $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND (la.key_insight != '' OR la.key_insight IS NOT NULL) AND DATE(la.key_insight_date) = CURDATE()  ";
+                                             break;
+                case 'self_cnsltn_mnth':     $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND (la.key_insight != '' OR la.key_insight IS NOT NULL)  ".$whr_completed;//AND DATE(la.key_insight_date) > DATE_FORMAT(CURDATE(), '%Y-%m-01') 
+                                             break;
+                case 'hot'  :                $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='hot' 
+                    AND lm.email NOT IN( SELECT email_id FROM order_details WHERE program_status NOT IN(0,1,2,4) GROUP BY email_id) 
+                    AND lm.status in (SELECT status_name FROM `bn_lead_status` where new_crm='1') 
+                    AND lm.email NOT IN(SELECT email_id
+                           FROM   order_details
+                           WHERE  program_status IN( 0, 1, 2, 4 ))
+                    AND lm.phone NOT IN(SELECT phone
+                               FROM   registries
+                               WHERE  user_status = 'Active') ";//AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY)
+                                             $sale_condition=1;
+                                             break;
+                case 'warm'  :               $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='warm' 
+                    AND lm.email NOT IN( SELECT email_id FROM order_details WHERE program_status NOT IN(0,1,2,4) GROUP BY email_id) 
+                    AND lm.status in (SELECT status_name FROM `bn_lead_status` where new_crm='1') 
+                    AND lm.email NOT IN(SELECT email_id
+                           FROM   order_details
+                           WHERE  program_status IN( 0, 1, 2, 4 ))
+                    AND lm.phone NOT IN(SELECT phone
+                               FROM   registries
+                               WHERE  user_status = 'Active') ";//AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) 
+                                             $sale_condition=1;
+                                             break;
+                case 'to_engage'  :          $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='to engage' 
+                    AND lm.email NOT IN( SELECT email_id FROM order_details WHERE program_status NOT IN(0,1,2,4) GROUP BY email_id) 
+                    AND lm.status in (SELECT status_name FROM `bn_lead_status` where new_crm='1') 
+                    AND lm.email NOT IN(SELECT email_id
+                           FROM   order_details
+                           WHERE  program_status IN( 0, 1, 2, 4 ))
+                    AND lm.phone NOT IN(SELECT phone
+                               FROM   registries
+                               WHERE  user_status = 'Active') ";//AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY)
+                                             $sale_condition=1;
+                                             break;
+                case 'cold'  :               $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='cold' 
+                    AND lm.email NOT IN( SELECT email_id FROM order_details WHERE program_status NOT IN(0,1,2,4) GROUP BY email_id) 
+                    AND lm.status in (SELECT status_name FROM `bn_lead_status` where new_crm='1') 
+                    AND lm.email NOT IN(SELECT email_id
+                           FROM   order_details
+                           WHERE  program_status IN( 0, 1, 2, 4 ))
+                    AND lm.phone NOT IN(SELECT phone
+                               FROM   registries
+                               WHERE  user_status = 'Active') ";//AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) 
+                                             $sale_condition=1;
+                                             break;  
+                case 'spam'  :               $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='spam' ";//AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) 
+                                             $sale_condition=1;                             
+                                             break;                             
+                case '1' :                   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.stage)='1' ";//AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) 
+                                             $sale_condition=1;
+                                             break;
+                case '2' :                   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.stage)='2' ";//AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) 
+                                             $sale_condition=1;
+                                             break;
+                case '3' :                   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.stage)='3'   ";//AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY)
+                                             $sale_condition=1;
+                                             break;
+                case '4' :                   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.stage)='4' ";//AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) 
+                                             $sale_condition=1;
+                                             break;                             
+                case 'ld_to_cap':            $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.email not in ( SELECT lms.email FROM lead_management lms,lead_action las WHERE lms.email=las.email and lms.created > CURDATE() - INTERVAL 30 DAY and las.assign_to !='' GROUP BY lms.email )  ";//AND lm.created > CURDATE() - INTERVAL 30 DAY
+                                             $sale_condition=1;
+                                             break;  
+                case 'assigned':            $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND DATE(la.assign_date) = CURDATE() ";
+                                             $sale_condition=1;
+                                             break; 
+                case 'followup':            $where = " DATE(fu_date)=CURDATE() AND (assign_to='{$name}' OR fu_assigned='{$name}') ";
+                                             $sale_condition=1;
+                                             break;  
+                case 'consultation':            $where = " DATE(key_insight_date)=CURDATE() AND LCASE(assign_to)='".strtolower($name)."' ";
+                                             $sale_condition=1;
+                                             break; 
+                case 'todayhot':            $where = " lm.status='hot' AND ls.status='hot' AND DATE(ls.created)=CURDATE() 
+                        AND LCASE(la.assign_to)='".strtolower($name)."'";//AND la.assign_date > (CURDATE() - INTERVAL 30 DAY) 
+                                             $sale_condition=1;
+                                             break; 
+                case '1_p':                 $where = " lm.phase='1' AND LCASE(la.assign_to)='".strtolower($name)."'";//AND la.assign_date > (CURDATE() - INTERVAL 30 DAY) 
+                                             $sale_condition=1;
+                                             break;  
+                case '2_p':                 $where = " lm.phase='2' AND LCASE(la.assign_to)='".strtolower($name)."'";//AND la.assign_date > (CURDATE() - INTERVAL 30 DAY) 
+                                             $sale_condition=1;
+                                             break;  
+                case '3_p':                 $where = " lm.phase='3' AND LCASE(la.assign_to)='".strtolower($name)."'";//AND la.assign_date > (CURDATE() - INTERVAL 30 DAY) 
+                                             $sale_condition=1;
+                                             break;  
+                case '4_p':                 $where = " lm.phase='4' AND LCASE(la.assign_to)='".strtolower($name)."'";//AND la.assign_date > (CURDATE() - INTERVAL 30 DAY) 
+                                             $sale_condition=1;
+                                             break;  
+                case 'all':                 $where = " 1 ";//AND la.assign_date > (CURDATE() - INTERVAL 30 DAY) 
+                                             $sale_condition=1;
+                                             break;                        
+                default: $where = " lm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01') ";//lm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01') 
+            }
+            $date_condition = 0;
+        }else{
+            $where = " lm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01') ";//
+            $date_condition = 1;
+            if(!empty($get_parameters['completed'])){
+                $sale_condition = 3;
+            }else{
+                $sale_condition=1;
+            }
+        }
+        
+        if(!empty($get_parameters['df']) && !empty($get_parameters['dt'])){
+            if($date_condition==1){
+                $where = "";   
+            }else{
+                $where .= " AND ";   
+            }
+            $from_date = date('Y-m-d',strtotime($get_parameters['df']));
+            $to_date = date('Y-m-d',strtotime($get_parameters['dt']));
+            $where .= " (DATE(lm.created) BETWEEN '".$from_date."' AND '".$to_date."') ";
+        }
+        if(!empty($get_parameters['agf']) && !empty($get_parameters['agt'])){
+            if($date_condition==1){
+                $where = "";   
+            }else{
+                $where .= " AND ";   
+            }
+            $where .= " (CAST(lm.age AS UNSIGNED) BETWEEN '".$get_parameters['agf']."' AND '".$get_parameters['agt']."') ";
+        }
+        
+        
+        if($sale_condition==1){
+            $where .= " AND lm.email NOT IN(
+                            SELECT
+                                email_id
+                            FROM
+                                order_details
+                            WHERE program_status IN(0,1,2,4)
+                        ) AND lm.phone NOT IN(
+                            SELECT
+                                mobile_no1
+                            FROM
+                                billing_details bl,order_details od
+                            WHERE bl.email_id=od.email_id and program_status IN(0,1,2,4)
+                        ) AND lm.phone NOT IN(
+                            SELECT
+                                phone
+                            FROM
+                                registries
+                            WHERE user_status='Active'
+                        )
+                    ";
+        }
+        if($sale_condition==3){
+            $where .= " AND lm.email IN(
+                            SELECT
+                                email_id
+                            FROM
+                                order_details
+                            WHERE program_status IN(0,1,2,4)
+                        ) AND lm.phone IN(
+                            SELECT
+                                mobile_no1
+                            FROM
+                                billing_details bl,order_details od
+                            WHERE bl.email_id=od.email_id and program_status IN(0,1,2,4)
+                        ) AND lm.phone IN(
+                            SELECT
+                                phone
+                            FROM
+                                registries
+                            WHERE user_status='Active'
+                        )
+                    ";
+        }
+        
+        //echo $where;exit;
+        //(CASE WHEN lm.enquiry_from!='consultation' THEN lm.profile ELSE '( Website Form Consultation )' END ) AS profile,
+        $sql= "SELECT
+                    lm.id,
+                    la.fu_note,
+                    la.fu_other_note,
+                    la.key_insight,
+                    lm.profile,
+                    lm.phase,
+                    upper(lm.suggested_program) as suggested_program,
+                    (CASE WHEN lm.fname!='' THEN CONCAT(lm.fname, ' ', lm.lname) ELSE lm.name END ) AS name,
+                    (CASE WHEN lm.gender != '' THEN lm.gender ELSE 'NA' END ) AS gender,
+                    (CASE WHEN lm.age != '' THEN CONCAT(lm.age, ' yrs') ELSE 'NA' END ) AS lead_age,
+                    (CASE WHEN lm.height != '' THEN CONCAT(lm.height,'.',lm.inch) ELSE 'NA' END ) AS height,
+                    lm.email,
+                    lm.phone,
+                    lm.country,
+                    lm.stage,
+                    (CASE WHEN lm.body_mass_index != '' OR lm.body_mass_index IS NOT NULL THEN 'Yes' ELSE 'No' END ) AS bmi,
+                    (CASE WHEN LENGTH(lm.phone) > 4 THEN 'Yes' ELSE 'No' END ) AS phone_no,
+                    mobile_verified AS verify,
+                    DATE_FORMAT(lm.created, '%D %b %Y') AS created_date,
+                    (SELECT assign_to FROM lead_action WHERE email=lm.email order by id desc limit 1) as assign_to,
+                    (CASE WHEN (SELECT enquiry_from FROM lead_management WHERE email = lm.email AND DATE(created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') LIMIT 1)
+                    IS NOT NULL THEN (SELECT enquiry_from FROM lead_management WHERE email = lm.email AND DATE(created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') LIMIT 1)
+                    ELSE enquiry_from
+                    END ) AS lead_source,
+                    (
+                        SELECT
+                            GROUP_CONCAT(enquiry_from)
+                        FROM
+                            lead_management
+                        WHERE
+                            email = lm.email
+                        ORDER BY
+                            id
+                        DESC
+                    ) AS all_source,
+                    lm.status AS lead_status,
+                    lm.sub_status AS lead_sub_status,
+                    lm.weight,
+                    lm.ideal_weight,
+                    lm.body_mass_index,
+                    lm.age,
+                    lm.overall_health_score,
+                    (CASE WHEN (select full_name from admin_user where admin_id=(select mentor_id from registries where email_id=lm.email limit 1)) IS NOT NULL 
+                     THEN (select full_name from admin_user where admin_id=(select mentor_id from registries where email_id=lm.email limit 1))
+                     ELSE 'NA' END) as omr_mentor,
+                    DATE_FORMAT(la.assign_date, '%D %b %Y') as assign_date,
+                    lm.health_category,
+                    (
+                        CASE 
+                        WHEN (SELECT
+                                count(email_id)
+                            FROM
+                                order_details
+                            WHERE email_id=lm.email AND program_status IN(0,1,2,4) GROUP BY email_id) > 0 THEN 'Active Client'
+                        WHEN (SELECT
+                                count(email_id)
+                            FROM
+                                order_details
+                            WHERE email_id=lm.email AND program_status NOT IN(0,1,2,4) GROUP BY email_id) > 0 THEN 'OMR'
+                    
+                        WHEN(
+                        SELECT
+                            DATE(created)
+                        FROM
+                            lead_management
+                        WHERE
+                            email = lm.email AND id != lm.id
+                        ORDER BY
+                            id
+                        DESC
+                        LIMIT 1
+                        ) <(
+                            DATE(lm.created) - INTERVAL 30 DAY
+                        ) THEN 'OLR'
+                        ELSE 'NEW'
+                    END
+                    ) AS lead_type, CASE WHEN consultation = 1 THEN 'Yes' ELSE 'No'
+                    END AS consultation,(
+                        SELECT
+                            GROUP_CONCAT(health_issue)
+                        FROM
+                            `bn_app_hs_issue`
+                        WHERE
+                            health_score_id = lm.id
+                    ) AS health_issues,
+                        CASE WHEN consultation = 1 THEN
+                        (
+                            CASE WHEN (SELECT CONCAT(DATE_FORMAT(call_date, '%D %b'),' ',time_slot) FROM bn_consultation_call_booking WHERE lead_id = lm.id GROUP BY lead_id) != '' 
+                                OR (SELECT CONCAT(DATE_FORMAT(call_date, '%D %b'),' ',time_slot) FROM bn_consultation_call_booking WHERE lead_id = lm.id GROUP BY lead_id) IS NOT NULL 
+                                    THEN (SELECT CONCAT(DATE_FORMAT(call_date, '%D %b'),' ',time_slot) FROM bn_consultation_call_booking WHERE lead_id = lm.id GROUP BY lead_id) 
+                                ELSE ''
+                    END 
+                    ) ELSE 'NA'
+                    END AS consultation_date,
+                    la.key_insight as key_insight,
+                    la.fu_note as fu_note
+                    FROM
+                        `lead_management` lm
+                    LEFT JOIN lead_action la ON
+                        lm.email = la.email
+                    LEFT JOIN lead_status_log ls ON
+                        lm.email = ls.email
+                    WHERE
+                        ".$whrClause." ".$where." 
+                        
+                    GROUP BY
+                        lm.email
+                    ORDER BY
+                        `lm`.`id`
+                DESC";
+         //echo $sql;exit;
+
+        $query=$this->db->query($sql);
+        
+        // echo "<pre>";
+        // print_r($query->result_array());
+        // exit;
+
+        if($query->num_rows()>0)
+        {
+            return $query->result_array();
+        }else{
+            return [];
+        }
+
+        /* function get_lead_details_data_query : ends here   */
+    }
+    public function get_order_history_data_query($get_parameters = false)
+    {
+        $where = "";
+        $pramsClause = "1";
+        if(!empty(@$get_parameters['df']) && !empty(@$get_parameters['dt'])){
+            $pramsClause = "";
+            $from_date = date('Y-m-d',strtotime($get_parameters['df']));
+            $to_date = date('Y-m-d',strtotime($get_parameters['dt']));
+            $where .= " DATE(od.date) BETWEEN '".$from_date."' AND '".$to_date."' AND ";
+            $where .= " lm.age BETWEEN ".$get_parameters['agf']." AND ".$get_parameters['agt']." ";
+            if(!empty(@$get_parameters['name_email'])){
+                $pramsClause .= " AND ( lm.fname LIKE '%".$get_parameters['name_email']."%' OR lm.lname LIKE '%".$get_parameters['name_email']."%' OR lm.name LIKE '%".$get_parameters['name_email']."%' OR lm.email LIKE '%".$get_parameters['name_email']."%' )";
+            }
+
+            if(!empty(@$get_parameters['method'])){
+                $pramsClause .= " AND ( od.payment_method LIKE '%".$get_parameters['method']."%' )";
+            }
+
+            if($pramsClause!=""){
+                $where = $where.$pramsClause;
+            }
+        }else{
+            if(!empty(@$get_parameters['name_email'])){
+                $pramsClause .= " AND ( lm.fname LIKE '%".$get_parameters['name_email']."%' OR lm.lname LIKE '%".$get_parameters['name_email']."%' OR lm.name LIKE '%".$get_parameters['name_email']."%' OR lm.email LIKE '%".$get_parameters['name_email']."%' )";
+            }
+
+            if(!empty(@$get_parameters['method'])){
+                $pramsClause .= " AND ( od.payment_method LIKE '%".$get_parameters['method']."%' )";
+            }
+
+            if($pramsClause!="1"){
+                $where = $where.$pramsClause;
+            }else{
+                $where = " 1 AND DATE(od.date) BETWEEN CURDATE() - INTERVAL 30 DAY AND CURDATE()";
+            }
+            
+        }
+        
+
+        
+
+        
+        $sql= "SELECT od.order_type,
+                   lm.id,
+                   lm.enquiry_from,
+                   lm.utm_source,
+                   lm.age,
+                   lm.created AS enquiry_date,
+                   lm.email,
+                   la2.assign_to,
+                   od.*,
+                   r.first_name,
+                   r.last_name,
+                   r.gender,
+                   ad_u.first_name as mentor_first_name,
+                   ad_u.last_name as mentor_last_name,
+                   (SELECT mobile_no1
+                    FROM   billing_details
+                    WHERE  mobile_no1 != ''
+                           AND user_id = r.id
+                    LIMIT  1) AS mobile_no1
+            FROM   order_details od
+                   INNER JOIN registries AS r
+                           ON r.id = od.userid
+                   LEFT JOIN lead_management lm
+                          ON lm.email = od.email_id
+                   LEFT JOIN lead_action la2
+                          ON la2.email = od.email_id
+                   LEFT JOIN admin_user ad_u
+                          ON ad_u.admin_id = r.mentor_id
+                WHERE ".$where."
+            GROUP  BY od.order_id
+            ORDER  BY order_id DESC";//die;
+        
+
+        $query=$this->db->query($sql);
+        if($query->num_rows()>0)
+        {
+            return $query->result_array();
+        }else{
+            return [];
+        }
+        /* function get_lead_details_data_query : ends here   */
+    }
+
+
+    public function get_order_history_data_query__($get_parameters,$searchValue,$columnSortOrder,$columnName,$row,$rowperpage)
+    {
+        $where = '';$sale_condition=0; 
+        $name = $_SESSION['balance_session']['first_name'];
+        //Added By Navin Start
+        $whrClause = "";
+        $stage_count = intval(@$get_parameters['stage']);
+        if($stage_count != 0){
+            switch($stage_count){      
+                case 1:      
+                    $whrClause = "  lm.stage = 1 AND ";     
+                    break;      
+                case 2:      
+                    $whrClause = "  lm.stage = 2 AND ";       
+                    break;      
+                case 3:      
+                    $whrClause = "  lm.stage = 3 AND ";    
+                    break; 
+                case 4:      
+                    $whrClause = "  lm.stage = 4 AND ";    
+                    break; 
+                default:      
+                    $whrClause = "";     
+            }//switch($stage_count){
+        }else{
+            $whrClause = "";
+        }//if($stage_count != 0){
+        //Added By Navin END
+    // BS leads
+        if(!empty($get_parameters) && !empty($get_parameters['lead_by']) && $get_parameters['lead_by']=='bs'){
+            //echo $get_parameters['bs_assign'];exit;
+            if(@$get_parameters['bs_assign']=='0'){ //echo 'if:';exit;
+                $where_condition = " AND od.email_id IN(SELECT email FROM lead_action WHERE LCASE(`assign_to`) = '".strtolower($name)."' GROUP BY email) ";
+            }else{
+                $where_condition = " AND od.email_id NOT IN(SELECT email FROM lead_action WHERE `assign_to` != '' GROUP BY email) ";
+            }
+            if(!empty($get_parameters['dys'])){
+                if($get_parameters['dys']==7){
+                    $days_between = " DATE(od.date) BETWEEN (CURDATE() - INTERVAL 7 DAY) AND CURDATE() AND ";
+                }elseif($get_parameters['dys']==15){
+                    $days_between = " DATE(od.date) BETWEEN (CURDATE() - INTERVAL 15 DAY) AND (CURDATE() - INTERVAL 7 DAY) AND ";
+                }elseif($get_parameters['dys']==30){
+                    $days_between = " DATE(od.date) BETWEEN (CURDATE() - INTERVAL 30 DAY) AND (CURDATE() - INTERVAL 15 DAY) AND ";
+                }elseif($get_parameters['dys']==90){
+                    $days_between = " DATE(od.date) BETWEEN (CURDATE() - INTERVAL 90 DAY) AND (CURDATE() - INTERVAL 30 DAY) AND ";
+                }
+            }else{
+                $days_between = " DATE(od.date) >= (CURDATE() - INTERVAL 90 DAY) AND ";
+            }
+            $sql= "SELECT CONCAT(rg.first_name,' ',rg.last_name) as name,lm.enquiry_from AS lead_source,lm.status AS lead_status,
+                        CONCAT(lm.fname, ' ', lm.lname) AS name,
+                                (
+                                        CASE WHEN lm.gender != '' THEN lm.gender ELSE 'NA'
+                                    END
+                                ) AS gender,
+                                (
+                                    CASE WHEN lm.age != '' THEN CONCAT(lm.age, ' yrs') ELSE 'NA'
+                                END
+                                ) AS lead_age,
+                                (
+                                    CASE WHEN lm.height != '' THEN CONCAT(lm.height,'.',lm.inch) ELSE 'NA'
+                                END
+                                ) AS height,
+                                mobile_verified AS verify,
+                                DATE_FORMAT(lm.created, '%D %b %Y') AS created_date,
+                                rg.phone,userid,od.email_id as email,program_name,prog_duration,
+                                (SELECT TRUNCATE(SUM(diffrence),2) as diff FROM `weight_monitor_record` where order_id =od.order_id) wt_diff,
+                            (select full_name from admin_user where admin_id=rg.mentor_id)as mentor,
+                            (select assign_to from lead_action where email=lm.email GROUP by email)as assign_to 
+            FROM `order_details` od 
+            LEFT JOIN registries rg ON od.userid=rg.id 
+            LEFT JOIN lead_management lm ON od.email_id = lm.email      
+            WHERE ".$whrClause." ".$days_between." `program_type`=1 and od.email_id !='' 
+            AND od.email_id not in (select email_id from order_details where `program_type`=0 GROUP by email_id)
+            ".$where_condition." GROUP by od.email_id ";
+            //echo $sql;
+            $query=$this->db->query($sql);
+        
+            // echo "<pre>";
+            // print_r($query->result_array());
+            // exit;
+    
+            if($query->num_rows()>0)
+            {
+                return $query->result_array();
+            }else{
+                return [];
+            }
+            exit;
+        }
+ // LEAD and OMR       
+        if(!empty($get_parameters) && !empty($get_parameters['lead_by'])){
+            
+            switch($get_parameters['lead_by']){
+                case 'lds_avlble_tdy':       $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.email not in ( SELECT lms.email FROM lead_management lms,lead_action las WHERE lms.email=las.email and DATE(lms.created) = CURDATE() and las.assign_to !='' GROUP BY lms.email ) AND DATE(lm.created) = CURDATE() ";
+                                             $sale_condition=1;
+                                             break;
+                case 'lds_avlble_mnth':      $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.email not in ( SELECT lms.email FROM lead_management lms,lead_action las WHERE lms.email=las.email and DATE(lms.created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') and las.assign_to !='' GROUP BY lms.email ) AND DATE(lm.created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+                                             $sale_condition=1;
+                                             break;
+                case 'frsh_lds_avlble_tdy':  $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.stage='".$get_parameters['stage']."' AND lm.id NOT IN (SELECT id FROM lead_management ldm WHERE (SELECT DATE(created) FROM lead_management WHERE email = ldm.email AND id != ldm.id ORDER BY id DESC LIMIT 1) < (DATE(ldm.created) - INTERVAL 30 DAY) AND ldm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01')) AND DATE(lm.created) = CURDATE() ";
+                                             $sale_condition=1;                
+                                             break;
+                case 'old_lds_avlble_tdy':   $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.stage='".$get_parameters['stage']."' AND (SELECT DATE(created) FROM lead_management WHERE email = lm.email AND id != lm.id ORDER BY id DESC LIMIT 1) < (DATE(lm.created) - INTERVAL 30 DAY) AND DATE(lm.created) = CURDATE() ";
+                                             $sale_condition=1;
+                                             break;
+                case 'frsh_lds_avlble_mnth': $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.stage='".$get_parameters['stage']."' AND lm.id NOT IN (SELECT id FROM lead_management ldm WHERE (SELECT DATE(created) FROM lead_management WHERE email = ldm.email AND id != ldm.id ORDER BY id DESC LIMIT 1) < (DATE(ldm.created) - INTERVAL 30 DAY) AND ldm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01')) AND lm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+                                             $sale_condition=1;
+                                             break;
+                case 'old_lds_avlble_mnth':  $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.stage='".$get_parameters['stage']."' AND (SELECT DATE(created) FROM lead_management WHERE email = lm.email AND id != lm.id ORDER BY id DESC LIMIT 1) < (DATE(lm.created) - INTERVAL 30 DAY) AND lm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+                                             $sale_condition=1;
+                                             break;
+                case 'avlble_omr_tdy':       $where = " DATE(lm.created) = CURDATE() AND lm.phone !='' AND CHAR_LENGTH(lm.phone) > 4 AND lm.email IN (select email_id from order_details where program_status NOT IN(0,1,2,4)) AND lm.email NOT IN (select email_id from order_details where program_status IN ('1','4')) AND la.assign_date < (select DATE(created) from lead_management where email=lm.email order by id desc limit 1) ";
+                                             break;
+                case 'avlble_omr_mnth':      $where = " DATE(lm.created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND lm.phone !='' AND CHAR_LENGTH(lm.phone) > 4 AND lm.email IN (select email_id from order_details where program_status NOT IN(0,1,2,4)) AND lm.email NOT IN (select email_id from order_details where program_status IN ('1','4')) AND la.assign_date < (select DATE(created) from lead_management where email=lm.email order by id desc limit 1) ";
+                                             break;                             
+                case 'assgn_self_tdy':       $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(la.assign_from) IN ('".strtolower($name)."','') AND DATE(la.assign_date) = CURDATE()  ";
+                                             break;
+                case 'assgn_self_mnth':      $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(la.assign_from) IN ('".strtolower($name)."','') AND la.assign_date > DATE_FORMAT(CURDATE(), '%Y-%m-01')  ";
+                                             break;
+                case 'assgn_by_othrs_tdy':   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(la.assign_from) NOT IN('".strtolower($name)."','') AND DATE(la.assign_date) = CURDATE()  ";
+                                             break;
+                case 'assgn_by_othrs_mnth':  $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(la.assign_from) NOT IN('".strtolower($name)."','') AND la.assign_date > DATE_FORMAT(CURDATE(), '%Y-%m-01')  ";
+                                             break;
+                case 'self_fu_tdy':          $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND DATE(la.fu_date) = CURDATE()  ";
+                                             break;
+                case 'self_fu_mnth':         $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND DATE(la.fu_date) > DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+                                             break;
+                case 'self_cnsltn_tdy':      $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND (la.key_insight != '' OR la.key_insight IS NOT NULL) AND DATE(la.key_insight_date) = CURDATE()  ";
+                                             break;
+                case 'self_cnsltn_mnth':     $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND (la.key_insight != '' OR la.key_insight IS NOT NULL) AND DATE(la.key_insight_date) > DATE_FORMAT(CURDATE(), '%Y-%m-01')  ";
+                                             break;
+                case 'hot'  :                $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='hot' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;
+                                             break;
+                case 'warm'  :               $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='warm' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;
+                                             break;
+                case 'to_engage'  :          $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='to engage' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;
+                                             break;
+                case 'cold'  :               $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='cold' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;
+                                             break;  
+                case 'spam'  :               $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='spam' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;                             
+                                             break;                             
+                case '1' :                   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.stage)='1' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;
+                                             break;
+                case '2' :                   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.stage)='2' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;
+                                             break;
+                case '3' :                   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.stage)='3' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY)  ";
+                                             $sale_condition=1;
+                                             break;
+                case '4' :                   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.stage)='4' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;
+                                             break;                             
+                case 'ld_to_cap':            $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.email not in ( SELECT lms.email FROM lead_management lms,lead_action las WHERE lms.email=las.email and lms.created > CURDATE() - INTERVAL 30 DAY and las.assign_to !='' GROUP BY lms.email ) AND lm.created > CURDATE() - INTERVAL 30 DAY ";
+                                             $sale_condition=1;
+                                             break;  
+                case 'assigned':            $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND DATE(la.assign_date) = CURDATE() ";
+                                             $sale_condition=1;
+                                             break; 
+                case 'followup':            $where = " DATE(fu_date)=CURDATE() AND (assign_to='{$name}' OR fu_assigned='{$name}') ";
+                                             $sale_condition=1;
+                                             break;  
+                case 'consultation':            $where = " DATE(key_insight_date)=CURDATE() AND LCASE(assign_to)='".strtolower($name)."' ";
+                                             $sale_condition=1;
+                                             break; 
+                case 'todayhot':            $where = " lm.status='hot' AND ls.status='hot' AND DATE(ls.created)=CURDATE() 
+                        AND la.assign_date > (CURDATE() - INTERVAL 30 DAY) 
+                        AND LCASE(la.assign_to)='".strtolower($name)."'";
+                                             $sale_condition=1;
+                                             break;                            
+                default: $where = " lm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+            }
+            $date_condition = 0;
+        }else{
+            $where = " lm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+            $date_condition = 1;
+            $sale_condition=1;
+        }
+        
+        if(!empty($get_parameters['df']) && !empty($get_parameters['dt'])){
+            if($date_condition==1){
+                $where = "";   
+            }else{
+                $where .= " AND ";   
+            }
+            $from_date = date('Y-m-d',strtotime($get_parameters['df']));
+            $to_date = date('Y-m-d',strtotime($get_parameters['dt']));
+            $where .= " (DATE(lm.created) BETWEEN '".$from_date."' AND '".$to_date."') ";
+            $where .= " AND (CAST(lm.age AS UNSIGNED) BETWEEN '".$get_parameters['agf']."' AND '".$get_parameters['agt']."') ";
+        }
+        
+        if($sale_condition==1){
+            $where .= " AND lm.email NOT IN(
+                            SELECT
+                                email_id
+                            FROM
+                                order_details
+                            WHERE program_status IN(0,1,2,4)
+                        ) AND lm.phone NOT IN(
+                            SELECT
+                                mobile_no1
+                            FROM
+                                billing_details bl,order_details od
+                            WHERE bl.email_id=od.email_id and program_status IN(0,1,2,4)
+                        ) AND lm.phone NOT IN(
+                            SELECT
+                                phone
+                            FROM
+                                registries
+                            WHERE user_status='Active'
+                        )
+                    ";
+        }
+        
+        //echo $where;exit;
+        //(CASE WHEN lm.enquiry_from!='consultation' THEN lm.profile ELSE '( Website Form Consultation )' END ) AS profile,
+        if($searchValue != ''){
+            $searchQuery = " 
+                    AND (
+                        la.fu_note like '%".$searchValue."%' 
+                        or la.fu_other_note like '%".$searchValue."%' 
+                        or la.key_insight like'%".$searchValue."%' 
+                        or lm.email like'%".$searchValue."%' 
+                        or lm.phone like'%".$searchValue."%' 
+                        or lm.country like'%".$searchValue."%' 
+                        or lm.coustagentry like'%".$searchValue."%' 
+                        or lm.fname like'%".$searchValue."%' 
+                        or lm.gender like'%".$searchValue."%' 
+                        or lm.age like'%".$searchValue."%' 
+                        or lm.phone like'%".$searchValue."%' 
+                        or lm.status like'%".$searchValue."%' 
+                        or lm.sub_status like'%".$searchValue."%' 
+                        or lm.weight like'%".$searchValue."%' 
+                        or lm.ideal_weight like'%".$searchValue."%' 
+                        or lm.body_mass_index like'%".$searchValue."%'
+                        or lm.overall_health_score like'%".$searchValue."%' 
+                        or la.key_insight like'%".$searchValue."%' 
+                        or la.fu_note like'%".$searchValue."%' 
+                    ) 
+                ";
+        }
+        $sql= "SELECT
+                    lm.id,
+                    
+                    la.fu_note,
+                    la.fu_other_note,
+                    la.key_insight,
+                    lm.profile,
+                    (CASE WHEN lm.fname!='' THEN CONCAT(lm.fname, ' ', lm.lname) ELSE lm.name END ) AS name,
+                    (CASE WHEN lm.gender != '' THEN lm.gender ELSE 'NA' END ) AS gender,
+                    (CASE WHEN lm.age != '' THEN CONCAT(lm.age, ' yrs') ELSE 'NA' END ) AS lead_age,
+                    (CASE WHEN lm.height != '' THEN CONCAT(lm.height,'.',lm.inch) ELSE 'NA' END ) AS height,
+                    lm.email,
+                    lm.phone,
+                    lm.country,
+                    lm.stage,
+                    (CASE WHEN lm.body_mass_index != '' OR lm.body_mass_index IS NOT NULL THEN 'Yes' ELSE 'No' END ) AS bmi,
+                    (CASE WHEN LENGTH(lm.phone) > 4 THEN 'Yes' ELSE 'No' END ) AS phone_no,
+                    mobile_verified AS verify,
+                    DATE_FORMAT(lm.created, '%D %b %Y') AS created_date,
+                    (SELECT assign_to FROM lead_action WHERE email=lm.email order by id desc limit 1) as assign_to,
+                    (CASE WHEN (SELECT enquiry_from FROM lead_management WHERE email = lm.email AND DATE(created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') LIMIT 1)
+                    IS NOT NULL THEN (SELECT enquiry_from FROM lead_management WHERE email = lm.email AND DATE(created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') LIMIT 1)
+                    ELSE enquiry_from
+                    END ) AS lead_source,
+                    (
+                        SELECT
+                            GROUP_CONCAT(enquiry_from)
+                        FROM
+                            lead_management
+                        WHERE
+                            email = lm.email
+                        ORDER BY
+                            id
+                        DESC
+                    ) AS all_source,
+                    lm.status AS lead_status,
+                    lm.sub_status AS lead_sub_status,
+                    lm.weight,
+                    lm.ideal_weight,
+                    lm.body_mass_index,
+                    lm.age,
+                    lm.overall_health_score,
+                    (CASE WHEN (select full_name from admin_user where admin_id=(select mentor_id from registries where email_id=lm.email limit 1)) IS NOT NULL 
+                     THEN (select full_name from admin_user where admin_id=(select mentor_id from registries where email_id=lm.email limit 1))
+                     ELSE 'NA' END) as omr_mentor,
+                    DATE_FORMAT(la.assign_date, '%D %b %Y') as assign_date,
+                    lm.health_category,
+                    (
+                        CASE 
+                        WHEN (SELECT
+                                count(email_id)
+                            FROM
+                                order_details
+                            WHERE email_id=lm.email AND program_status IN(0,1,2,4) GROUP BY email_id) > 0 THEN 'Active Client'
+                        WHEN (SELECT
+                                count(email_id)
+                            FROM
+                                order_details
+                            WHERE email_id=lm.email AND program_status NOT IN(0,1,2,4) GROUP BY email_id) > 0 THEN 'OMR'
+                    
+                        WHEN(
+                        SELECT
+                            DATE(created)
+                        FROM
+                            lead_management
+                        WHERE
+                            email = lm.email AND id != lm.id
+                        ORDER BY
+                            id
+                        DESC
+                        LIMIT 1
+                        ) <(
+                            DATE(lm.created) - INTERVAL 30 DAY
+                        ) THEN 'OLR'
+                        ELSE 'NEW'
+                    END
+                    ) AS lead_type, CASE WHEN consultation = 1 THEN 'Yes' ELSE 'No'
+                    END AS consultation,(
+                        SELECT
+                            GROUP_CONCAT(health_issue)
+                        FROM
+                            `bn_app_hs_issue`
+                        WHERE
+                            health_score_id = lm.id
+                    ) AS health_issues,
+                        CASE WHEN consultation = 1 THEN
+                        (
+                            CASE WHEN (SELECT CONCAT(DATE_FORMAT(call_date, '%D %b'),' ',time_slot) FROM bn_consultation_call_booking WHERE lead_id = lm.id GROUP BY lead_id) != '' 
+                                OR (SELECT CONCAT(DATE_FORMAT(call_date, '%D %b'),' ',time_slot) FROM bn_consultation_call_booking WHERE lead_id = lm.id GROUP BY lead_id) IS NOT NULL 
+                                    THEN (SELECT CONCAT(DATE_FORMAT(call_date, '%D %b'),' ',time_slot) FROM bn_consultation_call_booking WHERE lead_id = lm.id GROUP BY lead_id) 
+                                ELSE ''
+                    END 
+                    ) ELSE 'NA'
+                    END AS consultation_date,
+                    la.key_insight as key_insight,
+                    la.fu_note as fu_note
+                    FROM
+                        `lead_management` lm
+                    LEFT JOIN lead_action la ON
+                        lm.email = la.email
+                    LEFT JOIN lead_status_log ls ON
+                        lm.email = ls.email
+                    WHERE
+                        ".$whrClause." ".$where." ".$searchQuery."
+                    GROUP BY
+                        lm.email
+                    ORDER BY
+                        `lm`.`id`
+                DESC limit ".$row.",".$rowperpage;
+         //echo $sql;exit;
+        
+        $query=$this->db->query($sql);
+        
+        // echo "<pre>";
+        // print_r($query->result_array());
+        // exit;
+
+        if($query->num_rows()>0)
+        {
+            return $query->result_array();
+            //return $sql;
+        }else{
+            return [];
+        }
+        
+        
+        /* function get_lead_details_data_query : ends here   */
+    }
+    public function get_lead_count_total($get_parameters,$searchValue,$columnSortOrder,$columnName,$row,$rowperpage)
+    {
+        $where = '';$sale_condition=0; 
+        $name = $_SESSION['balance_session']['first_name'];
+        //Added By Navin Start
+        $whrClause = "";
+        $stage_count = intval(@$get_parameters['stage']);
+        if($stage_count != 0){
+            switch($stage_count){      
+                case 1:      
+                    $whrClause = "  lm.stage = 1 AND ";     
+                    break;      
+                case 2:      
+                    $whrClause = "  lm.stage = 2 AND ";       
+                    break;      
+                case 3:      
+                    $whrClause = "  lm.stage = 3 AND ";    
+                    break; 
+                case 4:      
+                    $whrClause = "  lm.stage = 4 AND ";    
+                    break; 
+                default:      
+                    $whrClause = "";     
+            }//switch($stage_count){
+        }else{
+            $whrClause = "";
+        }//if($stage_count != 0){
+        //Added By Navin END
+    // BS leads
+        if(!empty($get_parameters) && !empty($get_parameters['lead_by']) && $get_parameters['lead_by']=='bs'){
+            //echo $get_parameters['bs_assign'];exit;
+            if(@$get_parameters['bs_assign']=='0'){ //echo 'if:';exit;
+                $where_condition = " AND od.email_id IN(SELECT email FROM lead_action WHERE LCASE(`assign_to`) = '".strtolower($name)."' GROUP BY email) ";
+            }else{
+                $where_condition = " AND od.email_id NOT IN(SELECT email FROM lead_action WHERE `assign_to` != '' GROUP BY email) ";
+            }
+            if(!empty($get_parameters['dys'])){
+                if($get_parameters['dys']==7){
+                    $days_between = " DATE(od.date) BETWEEN (CURDATE() - INTERVAL 7 DAY) AND CURDATE() AND ";
+                }elseif($get_parameters['dys']==15){
+                    $days_between = " DATE(od.date) BETWEEN (CURDATE() - INTERVAL 15 DAY) AND (CURDATE() - INTERVAL 7 DAY) AND ";
+                }elseif($get_parameters['dys']==30){
+                    $days_between = " DATE(od.date) BETWEEN (CURDATE() - INTERVAL 30 DAY) AND (CURDATE() - INTERVAL 15 DAY) AND ";
+                }elseif($get_parameters['dys']==90){
+                    $days_between = " DATE(od.date) BETWEEN (CURDATE() - INTERVAL 90 DAY) AND (CURDATE() - INTERVAL 30 DAY) AND ";
+                }
+            }else{
+                $days_between = " DATE(od.date) >= (CURDATE() - INTERVAL 90 DAY) AND ";
+            }
+            $sql= "SELECT CONCAT(rg.first_name,' ',rg.last_name) as name,lm.enquiry_from AS lead_source,lm.status AS lead_status,
+                        CONCAT(lm.fname, ' ', lm.lname) AS name,
+                                (
+                                        CASE WHEN lm.gender != '' THEN lm.gender ELSE 'NA'
+                                    END
+                                ) AS gender,
+                                (
+                                    CASE WHEN lm.age != '' THEN CONCAT(lm.age, ' yrs') ELSE 'NA'
+                                END
+                                ) AS lead_age,
+                                (
+                                    CASE WHEN lm.height != '' THEN CONCAT(lm.height,'.',lm.inch) ELSE 'NA'
+                                END
+                                ) AS height,
+                                mobile_verified AS verify,
+                                DATE_FORMAT(lm.created, '%D %b %Y') AS created_date,
+                                rg.phone,userid,od.email_id as email,program_name,prog_duration,
+                                (SELECT TRUNCATE(SUM(diffrence),2) as diff FROM `weight_monitor_record` where order_id =od.order_id) wt_diff,
+                            (select full_name from admin_user where admin_id=rg.mentor_id)as mentor,
+                            (select assign_to from lead_action where email=lm.email GROUP by email)as assign_to 
+            FROM `order_details` od 
+            LEFT JOIN registries rg ON od.userid=rg.id 
+            LEFT JOIN lead_management lm ON od.email_id = lm.email      
+            WHERE ".$whrClause." ".$days_between." `program_type`=1 and od.email_id !='' 
+            AND od.email_id not in (select email_id from order_details where `program_type`=0 GROUP by email_id)
+            ".$where_condition." GROUP by od.email_id ";
+            //echo $sql;
+            $query=$this->db->query($sql);
+        
+            // echo "<pre>";
+            // print_r($query->result_array());
+            // exit;
+    
+            if($query->num_rows()>0)
+            {
+                return $query->result_array();
+            }else{
+                return [];
+            }
+            exit;
+        }
+ // LEAD and OMR       
+        if(!empty($get_parameters) && !empty($get_parameters['lead_by'])){
+            
+            switch($get_parameters['lead_by']){
+                case 'lds_avlble_tdy':       $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.email not in ( SELECT lms.email FROM lead_management lms,lead_action las WHERE lms.email=las.email and DATE(lms.created) = CURDATE() and las.assign_to !='' GROUP BY lms.email ) AND DATE(lm.created) = CURDATE() ";
+                                             $sale_condition=1;
+                                             break;
+                case 'lds_avlble_mnth':      $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.email not in ( SELECT lms.email FROM lead_management lms,lead_action las WHERE lms.email=las.email and DATE(lms.created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') and las.assign_to !='' GROUP BY lms.email ) AND DATE(lm.created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+                                             $sale_condition=1;
+                                             break;
+                case 'frsh_lds_avlble_tdy':  $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.stage='".$get_parameters['stage']."' AND lm.id NOT IN (SELECT id FROM lead_management ldm WHERE (SELECT DATE(created) FROM lead_management WHERE email = ldm.email AND id != ldm.id ORDER BY id DESC LIMIT 1) < (DATE(ldm.created) - INTERVAL 30 DAY) AND ldm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01')) AND DATE(lm.created) = CURDATE() ";
+                                             $sale_condition=1;                
+                                             break;
+                case 'old_lds_avlble_tdy':   $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.stage='".$get_parameters['stage']."' AND (SELECT DATE(created) FROM lead_management WHERE email = lm.email AND id != lm.id ORDER BY id DESC LIMIT 1) < (DATE(lm.created) - INTERVAL 30 DAY) AND DATE(lm.created) = CURDATE() ";
+                                             $sale_condition=1;
+                                             break;
+                case 'frsh_lds_avlble_mnth': $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.stage='".$get_parameters['stage']."' AND lm.id NOT IN (SELECT id FROM lead_management ldm WHERE (SELECT DATE(created) FROM lead_management WHERE email = ldm.email AND id != ldm.id ORDER BY id DESC LIMIT 1) < (DATE(ldm.created) - INTERVAL 30 DAY) AND ldm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01')) AND lm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+                                             $sale_condition=1;
+                                             break;
+                case 'old_lds_avlble_mnth':  $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.stage='".$get_parameters['stage']."' AND (SELECT DATE(created) FROM lead_management WHERE email = lm.email AND id != lm.id ORDER BY id DESC LIMIT 1) < (DATE(lm.created) - INTERVAL 30 DAY) AND lm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+                                             $sale_condition=1;
+                                             break;
+                case 'avlble_omr_tdy':       $where = " DATE(lm.created) = CURDATE() AND lm.phone !='' AND CHAR_LENGTH(lm.phone) > 4 AND lm.email IN (select email_id from order_details where program_status NOT IN(0,1,2,4)) AND lm.email NOT IN (select email_id from order_details where program_status IN ('1','4')) AND la.assign_date < (select DATE(created) from lead_management where email=lm.email order by id desc limit 1) ";
+                                             break;
+                case 'avlble_omr_mnth':      $where = " DATE(lm.created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND lm.phone !='' AND CHAR_LENGTH(lm.phone) > 4 AND lm.email IN (select email_id from order_details where program_status NOT IN(0,1,2,4)) AND lm.email NOT IN (select email_id from order_details where program_status IN ('1','4')) AND la.assign_date < (select DATE(created) from lead_management where email=lm.email order by id desc limit 1) ";
+                                             break;                             
+                case 'assgn_self_tdy':       $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(la.assign_from) IN ('".strtolower($name)."','') AND DATE(la.assign_date) = CURDATE()  ";
+                                             break;
+                case 'assgn_self_mnth':      $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(la.assign_from) IN ('".strtolower($name)."','') AND la.assign_date > DATE_FORMAT(CURDATE(), '%Y-%m-01')  ";
+                                             break;
+                case 'assgn_by_othrs_tdy':   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(la.assign_from) NOT IN('".strtolower($name)."','') AND DATE(la.assign_date) = CURDATE()  ";
+                                             break;
+                case 'assgn_by_othrs_mnth':  $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(la.assign_from) NOT IN('".strtolower($name)."','') AND la.assign_date > DATE_FORMAT(CURDATE(), '%Y-%m-01')  ";
+                                             break;
+                case 'self_fu_tdy':          $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND DATE(la.fu_date) = CURDATE()  ";
+                                             break;
+                case 'self_fu_mnth':         $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND DATE(la.fu_date) > DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+                                             break;
+                case 'self_cnsltn_tdy':      $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND (la.key_insight != '' OR la.key_insight IS NOT NULL) AND DATE(la.key_insight_date) = CURDATE()  ";
+                                             break;
+                case 'self_cnsltn_mnth':     $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND (la.key_insight != '' OR la.key_insight IS NOT NULL) AND DATE(la.key_insight_date) > DATE_FORMAT(CURDATE(), '%Y-%m-01')  ";
+                                             break;
+                case 'hot'  :                $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='hot' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;
+                                             break;
+                case 'warm'  :               $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='warm' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;
+                                             break;
+                case 'to_engage'  :          $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='to engage' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;
+                                             break;
+                case 'cold'  :               $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='cold' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;
+                                             break;  
+                case 'spam'  :               $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.status)='spam' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;                             
+                                             break;                             
+                case '1' :                   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.stage)='1' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;
+                                             break;
+                case '2' :                   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.stage)='2' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;
+                                             break;
+                case '3' :                   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.stage)='3' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY)  ";
+                                             $sale_condition=1;
+                                             break;
+                case '4' :                   $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(lm.stage)='4' AND DATE(lm.created) >= (CURDATE() - INTERVAL 30 DAY) ";
+                                             $sale_condition=1;
+                                             break;                             
+                case 'ld_to_cap':            $where = " lm.phone !='' and CHAR_LENGTH(lm.phone) > 4 and lm.email not in ( SELECT lms.email FROM lead_management lms,lead_action las WHERE lms.email=las.email and lms.created > CURDATE() - INTERVAL 30 DAY and las.assign_to !='' GROUP BY lms.email ) AND lm.created > CURDATE() - INTERVAL 30 DAY ";
+                                             $sale_condition=1;
+                                             break;  
+                case 'assigned':            $where = " LCASE(la.assign_to) ='".strtolower($name)."' AND DATE(la.assign_date) = CURDATE() ";
+                                             $sale_condition=1;
+                                             break; 
+                case 'followup':            $where = " DATE(fu_date)=CURDATE() AND (assign_to='{$name}' OR fu_assigned='{$name}') ";
+                                             $sale_condition=1;
+                                             break;  
+                case 'consultation':            $where = " DATE(key_insight_date)=CURDATE() AND LCASE(assign_to)='".strtolower($name)."' ";
+                                             $sale_condition=1;
+                                             break; 
+                case 'todayhot':            $where = " lm.status='hot' AND ls.status='hot' AND DATE(ls.created)=CURDATE() 
+                        AND la.assign_date > (CURDATE() - INTERVAL 30 DAY) 
+                        AND LCASE(la.assign_to)='".strtolower($name)."'";
+                                             $sale_condition=1;
+                                             break;                            
+                default: $where = " lm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+            }
+            $date_condition = 0;
+        }else{
+            $where = " lm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+            $date_condition = 1;
+            $sale_condition=1;
+        }
+        
+        if(!empty($get_parameters['df']) && !empty($get_parameters['dt'])){
+            if($date_condition==1){
+                $where = "";   
+            }else{
+                $where .= " AND ";   
+            }
+            $from_date = date('Y-m-d',strtotime($get_parameters['df']));
+            $to_date = date('Y-m-d',strtotime($get_parameters['dt']));
+            $where .= " (DATE(lm.created) BETWEEN '".$from_date."' AND '".$to_date."') ";
+            $where .= " AND (CAST(lm.age AS UNSIGNED) BETWEEN '".$get_parameters['agf']."' AND '".$get_parameters['agt']."') ";
+        }
+        
+        if($sale_condition==1){
+            $where .= " AND lm.email NOT IN(
+                            SELECT
+                                email_id
+                            FROM
+                                order_details
+                            WHERE program_status IN(0,1,2,4)
+                        ) AND lm.phone NOT IN(
+                            SELECT
+                                mobile_no1
+                            FROM
+                                billing_details bl,order_details od
+                            WHERE bl.email_id=od.email_id and program_status IN(0,1,2,4)
+                        ) AND lm.phone NOT IN(
+                            SELECT
+                                phone
+                            FROM
+                                registries
+                            WHERE user_status='Active'
+                        )
+                    ";
+        }
+        
+        //echo $where;exit;
+        //(CASE WHEN lm.enquiry_from!='consultation' THEN lm.profile ELSE '( Website Form Consultation )' END ) AS profile,
+        if($searchValue != ''){
+            $searchQuery = " 
+                    AND (
+                        la.fu_note like '%".$searchValue."%' 
+                        or la.fu_other_note like '%".$searchValue."%' 
+                        or la.key_insight like'%".$searchValue."%' 
+                        or lm.email like'%".$searchValue."%' 
+                        or lm.phone like'%".$searchValue."%' 
+                        or lm.country like'%".$searchValue."%' 
+                        or lm.coustagentry like'%".$searchValue."%' 
+                        or lm.fname like'%".$searchValue."%' 
+                        or lm.gender like'%".$searchValue."%' 
+                        or lm.age like'%".$searchValue."%' 
+                        or lm.phone like'%".$searchValue."%' 
+                        or lm.status like'%".$searchValue."%' 
+                        or lm.sub_status like'%".$searchValue."%' 
+                        or lm.weight like'%".$searchValue."%' 
+                        or lm.ideal_weight like'%".$searchValue."%' 
+                        or lm.body_mass_index like'%".$searchValue."%'
+                        or lm.overall_health_score like'%".$searchValue."%' 
+                        or la.key_insight like'%".$searchValue."%' 
+                        or la.fu_note like'%".$searchValue."%' 
+                    ) 
+                ";
+        }
+        $sql= "SELECT
+                    lm.id
+
+                    FROM
+                        `lead_management` lm
+                    LEFT JOIN lead_action la ON
+                        lm.email = la.email
+                    WHERE
+                        ".$whrClause." ".$where." ".$searchQuery."
+                    GROUP BY
+                        lm.email
+                    ORDER BY
+                        `lm`.`id`
+                DESC ";
+         //echo $sql;exit;
+        
+        $query=$this->db->query($sql);
+        
+        // echo "<pre>";
+        // print_r($query->result_array());
+        // exit;
+
+        if($query->num_rows()>0)
+        {
+            return $query->num_rows();
+            //return $sql;
+        }else{
+            return [];
+        }
+        
+        
+        /* function get_lead_details_data_query : ends here   */
+    }
+
+
+}

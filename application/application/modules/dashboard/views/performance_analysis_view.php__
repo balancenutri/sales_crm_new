@@ -1,0 +1,1192 @@
+<style type="text/css">
+    input[type=checkbox]{
+        margin-right: 1%;
+    }
+</style>
+<div class="m-content">
+    <div class="m-portlet m-portlet--bordered m-portlet--unair">
+        <div class="m-portlet__head">
+            <div class="m-portlet__head-caption">
+                <div class="m-portlet__head-title">
+                    <h3 class="m-portlet__head-text">
+                        Performance Analysis
+                    </h3>
+                </div>          
+            </div>
+        </div>
+        <div class="m-portlet__body pa-p-0 pt-3">
+            <span class="m-section__sub">
+                <div class="float-left goal_set mb-4">
+                    <p>Goal set: Rs. <span><?= $goal_set[0]['sale_goal']; ?></span> | Units <span><?= $goal_set[0]['unit_goal']; ?></span></p>
+                </div>
+                <div class="float-right goal_set mb-4">
+                    <p>Goal achieved: Rs. <span><?= $sales_funnel_sales[0]['amt']; ?></span> | Units <span><?= $sales_funnel_sales[0]['unit']; ?></span></p>
+                </div>
+            </span>
+            <div class="clearfix"></div>
+            <div class="row">
+                
+                    <?php
+                        if(strtolower($this->session->balance_session['first_name'])=='shifa')
+                        {
+                    ?>
+                            <div class="col-lg-12 pa-p-0">
+                                <!--begin::Portlet-->
+                                <div class="col-lg-12 pa-p-0">
+                                    <div class="row">
+                                         <div class="col-lg-12 pa-p-0">
+                                            <label class="" >Please Select Consoler Name</label>
+                                        </div>
+                                        <div class="col-lg-11 pa-p-0">
+                                            <!--begin::Portlet-->
+                                           
+                                            <select id="multiselect2" name="languages[]" multiple="">
+                                            <?php
+                                            
+                                                foreach ($consoler_list as $key_consoler => $value_consoler) { 
+                                            ?>
+                                                    <option value="<?=$value_consoler?>" ><?=ucwords($value_consoler);?></option>
+                                            <?php
+                                                }
+                                             ?>
+                                            </select> 
+                                        </div>
+                                        <!-- <div class="col-lg-1 pa-p-0">
+                                            <button type="button" id="consoler_filter" class="btn btn-brand btn-sm" style="width: 100%;">Filter</button>
+                                        </div> -->
+                                    </div>
+                                </div>
+                            </div>
+                    <?php
+                        }else{
+                    ?>
+                            <input type="hidden" name="" class="logger" data-value = "">
+                    <?php
+                        }
+                    ?>
+                    <div class="col-lg-6 pa-p-0">
+                    <div class="m-accordion m-portlet m-portlet--bordered m-portlet--rounded m-accordion--default mt-5" id="m_accordion_sales_funnel" role="tablist">
+                
+                        <div class="m-accordion__item mb-0">
+                            <div class="m-accordion__item-head collapsed sales_funnel" data-id="sales_funnel" role="tab" id="m_accordion_sales_funnel_item_1_head" data-toggle="collapse" href="#m_accordion_sales_funnel_item_1_body" aria-expanded="false">
+                                <span class="m-accordion__item-title">Sales Funnel</span>
+                                <span class="m-accordion__item-mode"></span>     
+                            </div>
+
+                            <div class="m-accordion__item-body collapse" id="m_accordion_sales_funnel_item_1_body" role="tabpanel" aria-labelledby="m_accordion_sales_funnel_item_1_head" data-parent="#m_accordion_sales_funnel"> 
+                                <div class="m-accordion__item-content table-responsive">
+                                    <div class="m-portlet__body py-3">
+                                        <div class="search_section" style="padding: 0px 0px 1rem; border-bottom: 1px solid rgba(0, 0, 0, 0.125); margin: 0px 0px 1rem;" id="sal_tab">
+                                            <ul class="nav nav-tabs  m-tabs-line position-relative" role="tablist">
+                                                <?php
+                                                    $current_year = date("Y");
+                                                    $start_year = "2014";
+                                                    $display_year = $current_year-$start_year;
+                                                ?>
+                                                <select class="" id="sales_funnel_year" name="year" style="margin-right: 5px; height: 40px; margin-top: 4px; border: 1px solid black; background: none;">
+                                                    <!-- <option value="">Select Year</option> -->
+                                                    <?php
+                                                        for($i=0;$i<$display_year;$i++){
+                                                    ?>
+                                                            <option value="<?=$current_year?>"><?=$current_year?></option>
+                                                    <?php
+                                                            $current_year = $current_year-1;
+                                                        }
+                                                    ?>
+                                                </select>
+                                                <?php
+                                                        $dm = date('n')-1;
+                                                ?>
+                                                <select class="" id="sales_funnel_month" name="month" style="margin-right: 5px; height: 40px; margin-top: 4px; border: 1px solid black; background: none;">
+                                                    <option value="">Select Month</option>
+                                                    <?php
+                                                        for($i=0;$i<=11;$i++){
+                                                            $monthName = date('F', mktime(0, 0, 0, $i+1, 10));
+                                                            if($dm==$i){
+                                                    ?>
+                                                                <option value="<?=$i?>" selected><?=$monthName?></option>
+                                                    <?php
+                                                            }else{          
+                                                    ?>
+                                                                <option value="<?=$i?>"><?=$monthName?></option>
+                                                    <?php
+                                                            }
+                                                        }
+                                                    ?>
+                                                </select>
+
+                                                <!-- <li class="nav-item m-tabs__item">
+                                                    <a class="nav-link m-tabs__link active show" data-toggle="tab" href="#current_sales_funnel" role="tab" aria-selected="true">Current Month</a>
+                                                </li>
+                                                <li class="nav-item m-tabs__item" id="previous_sales_funnel_tab">
+                                                    <a class="nav-link m-tabs__link" data-toggle="tab" href="#previous_sales_funnel" role="tab" aria-selected="false">Previous Month</a>
+                                                </li> -->
+                                                <div class="switch" style="margin-left: 60px;">
+                                                        <input id="toggle-on" class="toggle toggle-left" name="toggle" value="false" type="radio" checked>
+                                                        <label for="toggle-on" class="toggle-btn" >Unit</label>
+                                                        <input id="toggle-off" class="toggle toggle-right" name="toggle" value="true" type="radio">
+                                                        <label for="toggle-off" class="toggle-btn" >%</label>
+                                                </div>
+
+                                            </ul>                        
+                                            <div class="tab-content">
+                                                <div class="tab-pane active show" id="current_sales_funnel" role="tabpanel">
+                                                        <div class="row">
+                                                            <table class="table table-bordered m-table m-table--head-bg-metal mb-0" id="tableData_table">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th class="text-center text-dark">#</th>
+                                                                        <th class="text-center text-dark" scope="row">Your</th>
+                                                                        <th class="text-center text-dark" scope="row">Overall</th>
+                                                                        <th class="text-center text-dark" scope="row">%</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody id="tableData">
+                                                                    <!--Ajax Call-->
+                                                                </tbody>
+                                                            </table> 
+                                                            <table class="table table-bordered m-table m-table--head-bg-metal mb-0" id="lead_conversion_table" style="display: none;">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th class="text-center text-dark">For Sale</th>
+                                                                        <th class="text-center text-dark" scope="row">Your</th>
+                                                                        <th class="text-center text-dark" scope="row">Team</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody id="lead_conversion">
+
+                                                                </tbody>
+                                                            </table>
+
+                                                        </div>
+
+                                                </div>
+                                                
+                                            </div>
+                                        </div>
+                                        
+                                    </div>
+                                     
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                    <!--end::Portlet-->
+                    
+                    
+                    <!--begin::Portlet-->
+                    
+                    <div class="m-accordion m-portlet m-portlet--bordered m-portlet--rounded m-accordion--default mt-5" id="m_accordion_effect_of_sales" role="tablist">
+                
+                        <div class="m-accordion__item mb-0">
+                            <div class="m-accordion__item-head collapsed effect_of_sales" data-id="effect_of_sales" role="tab" id="m_accordion_effect_of_sales_item_1_head" data-toggle="collapse" href="#m_accordion_effect_of_sales_item_1_body" aria-expanded="false">
+                                <span class="m-accordion__item-title">Effort for Sales</span>
+                                <span class="m-accordion__item-mode"></span>     
+                            </div>
+
+                            <div class="m-accordion__item-body collapse" id="m_accordion_effect_of_sales_item_1_body" role="tabpanel" aria-labelledby="m_accordion_effect_of_sales_item_1_head" data-parent="#m_accordion_effect_of_sales"> 
+                                <div class="m-accordion__item-content table-responsive">
+                                    <div class="m-portlet__body py-3">
+                                        <div class="search_section" style="padding: 0px 0px 1rem; border-bottom: 1px solid rgba(0, 0, 0, 0.125); margin: 0px 0px 1rem;">
+                                            <ul class="nav nav-tabs  m-tabs-line position-relative" role="tablist">
+                                                <?php
+                                                    $current_year = date("Y");
+                                                    $start_year = "2014";
+                                                    $display_year = $current_year-$start_year;
+                                                ?>
+                                                <select class="" id="effect_of_sales_year" name="year" style="margin-right: 5px; height: 40px; margin-top: 4px; border: 1px solid black; background: none;">
+                                                    <!-- <option value="">Select Year</option> -->
+                                                    <?php
+                                                        for($i=0;$i<$display_year;$i++){
+                                                    ?>
+                                                            <option value="<?=$current_year?>"><?=$current_year?></option>
+                                                    <?php
+                                                            $current_year = $current_year-1;
+                                                        }
+                                                    ?>
+                                                </select>
+                                                <?php
+                                                        $dm = date('n')-1;
+                                                ?>
+                                                <select class="" id="effect_of_sales_month" name="month" style="margin-right: 5px; height: 40px; margin-top: 4px; border: 1px solid black; background: none;">
+                                                    <option value="">Select Month</option>
+                                                    <?php
+                                                        for($i=0;$i<=11;$i++){
+                                                            $monthName = date('F', mktime(0, 0, 0, $i+1, 10));
+                                                            if($dm==$i){
+                                                    ?>
+                                                                <option value="<?=$i?>" selected><?=$monthName?></option>
+                                                    <?php
+                                                            }else{          
+                                                    ?>
+                                                                <option value="<?=$i?>"><?=$monthName?></option>
+                                                    <?php
+                                                            }
+                                                        }
+                                                    ?>
+                                                </select>
+
+
+                                            </ul>                        
+                                            <div class="tab-content">
+                                                <div class="tab-pane active show" id="current_effect_of_sales" role="tabpanel">
+                                                        <div class="row">
+                                                            <table class="table table-bordered m-table m-table--head-bg-metal mb-0" >
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th class="text-center text-dark">#</th>
+                                                                        <th class="text-center text-dark" scope="row">Your</th>
+                                                                        <th class="text-center text-dark" scope="row">Overall</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody id="tableDataEFS">
+
+                                                                </tbody>
+                                                            </table> 
+
+                                                        </div>
+
+                                                </div>
+                                                
+                                            </div>
+                                        </div>
+                                    </div>
+                                     
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                    <!--end::Portlet-->
+                
+                </div>
+                
+                <div class="col-lg-6 pa-p-0">
+            
+                    <!--begin::Portlet-->
+                    
+                    <div class="m-accordion m-portlet m-portlet--bordered m-portlet--rounded m-accordion--default mt-5" id="m_accordion_month_of_sales" role="tablist">
+                
+                        <div class="m-accordion__item mb-0">
+                            <div class="m-accordion__item-head collapsed month_of_sales" data-id="month_of_sales" role="tab" id="m_accordion_month_of_sales_item_1_head" data-toggle="collapse" href="#m_accordion_month_of_sales_item_1_body" aria-expanded="false">
+                                <span class="m-accordion__item-title">Month of Sales</span>
+                                <span class="m-accordion__item-mode"></span>     
+                            </div>
+
+                            <div class="m-accordion__item-body collapse" id="m_accordion_month_of_sales_item_1_body" role="tabpanel" aria-labelledby="m_accordion_month_of_sales_item_1_head" data-parent="#m_accordion_month_of_sales"> 
+                                <div class="m-accordion__item-content table-responsive">
+                                    <div class="clearfix"></div>
+                                    <div class="m-portlet__body py-3">
+                                        <div class="search_section" style="padding: 0px 0px 1rem; border-bottom: 1px solid rgba(0, 0, 0, 0.125); margin: 0px 0px 1rem;">
+                                            <ul class="nav nav-tabs  m-tabs-line position-relative" role="tablist">
+                                                <?php
+                                                    $current_year = date("Y");
+                                                    $start_year = "2014";
+                                                    $display_year = $current_year-$start_year;
+                                                ?>
+                                                <select class="" id="month_of_sales_year" name="year" style="margin-right: 5px; height: 40px; margin-top: 4px; border: 1px solid black; background: none;">
+                                                    <!-- <option value="">Select Year</option> -->
+                                                    <?php
+                                                        for($i=0;$i<$display_year;$i++){
+                                                    ?>
+                                                            <option value="<?=$current_year?>"><?=$current_year?></option>
+                                                    <?php
+                                                            $current_year = $current_year-1;
+                                                        }
+                                                    ?>
+                                                </select>
+                                                <?php
+                                                        $dm = date('n')-1;
+                                                ?>
+                                                <select class="" id="month_of_sales_month" name="month" style="margin-right: 5px; height: 40px; margin-top: 4px; border: 1px solid black; background: none;">
+                                                    <option value="">Select Month</option>
+                                                    <?php
+                                                        for($i=0;$i<=11;$i++){
+                                                            $monthName = date('F', mktime(0, 0, 0, $i+1, 10));
+                                                            if($dm==$i){
+                                                    ?>
+                                                                <option value="<?=$i?>" selected><?=$monthName?></option>
+                                                    <?php
+                                                            }else{          
+                                                    ?>
+                                                                <option value="<?=$i?>"><?=$monthName?></option>
+                                                    <?php
+                                                            }
+                                                        }
+                                                    ?>
+                                                </select>
+
+
+                                            </ul>                        
+                                            <div class="tab-content">
+                                                <div class="tab-pane active show" id="current_month_of_sales" role="tabpanel">
+                                                        <div class="row">
+                                                            <table class="table table-bordered m-table m-table--head-bg-metal mb-0" >
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th class="text-center text-dark">#</th>
+                                                                        <th class="text-center text-dark" scope="row">Your</th>
+                                                                        <th class="text-center text-dark" scope="row">Overall</th>
+                                                                        <!--<th class="text-center text-dark" scope="row">Contribution</th>-->
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody id="month_of_sales">
+                                                                    <!--Ajax Call-->
+                                                                </tbody>
+                                                            </table> 
+
+                                                        </div>
+
+                                                </div>
+                                                
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!--<div class="hd_looks_sec_list pt-0 basic_stack_report">
+                                        <ul>
+
+                                        </ul>
+                                    </div>-->
+                                    
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                    <!--end::Portlet-->
+                    
+                    
+                
+                </div>
+            </div>
+            
+            <div class="m-accordion m-portlet m-portlet--bordered m-portlet--rounded m-accordion--default mt-5" id="m_accordion_performance_analysis" role="tablist">
+                
+                <div class="m-accordion__item mb-0">
+                    <div class="m-accordion__item-head collapsed lead_source" data-id="lead_source" role="tab" id="m_accordion_performance_analysis_item_1_head" data-toggle="collapse" href="#m_accordion_performance_analysis_item_1_body" aria-expanded="    false">
+                        <!--<span class="m-accordion__item-icon"><i class="fa flaticon-user-ok"></i></span>-->
+                        <span class="m-accordion__item-title">Lead Source</span>
+                        <span class="m-accordion__item-mode"></span>     
+                    </div>
+
+                    <div class="m-accordion__item-body collapse" id="m_accordion_performance_analysis_item_1_body" role="tabpanel" aria-labelledby="m_accordion_performance_analysis_item_1_head" data-parent="#m_accordion_performance_analysis"> 
+                        <div class="m-accordion__item-content table-responsive">
+                            <table class="table table-bordered m-table m-table--head-bg-metal mb-0" id="conversion_by_source">
+                                <thead>
+                                    <tr>
+                                        <th class="text-left text-dark" rowspan="2">Source</th>
+                                        <th class="text-center text-dark" colspan="2">Lead</th>
+                                        <th class="text-center text-dark" scope="row" colspan="4">Sales</th>
+
+                                    </tr>
+                                    <tr>
+                                        <th class="text-center text-dark" >Your</th>
+                                        <th class="text-center text-dark" >Over all</th>
+                                        <th class="text-center text-dark" colspan="2">Your</th>
+                                        <th class="text-center text-dark" scope="row" colspan="2">Over all</th>
+                                        
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                </tbody>
+                            </table>  
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+    
+        </div>
+    </div>
+</div>
+<script type="text/javascript">
+    $('#sales_funnel_year, #sales_funnel_month').change(function(){
+        var isExpanded = $('.sales_funnel').attr("aria-expanded");
+        var year = <?php echo date("Y"); ?>;
+        var month = $('#sales_funnel_month').val();
+        var mothint = 0;
+        if(month==""){
+            month= '-1';
+        }
+        var $html_data = "";
+        var d = new Date();
+            var n = d.getMonth();
+            var years_arr = ["January", "February", "March","April", "May", "June","July", "August", "September","October", "November", "December"];
+        $html_data = '<option value="">Select Month</option>';
+        if(this.value==year){
+            for (var z = 0; z <= n; z++) { 
+                $html_data += '<option value="'+z+'">'+years_arr[z]+'</option>';
+            }
+        }else{
+            for (var z = 0; z <= 11; z++) { 
+                $html_data += '<option value="'+z+'">'+years_arr[z]+'</option>';
+            }
+        }
+
+        $('#sales_funnel_month').html($html_data);
+        mothint = parseInt(month)+1;
+        toggle_switch = $('input:radio[name="toggle"]:checked').val();
+        
+        if(toggle_switch=="false"){
+            $('#lead_conversion_table').hide(); 
+            $('#tableData_table').show();
+            setTimeout(function() {   
+                $(".sales_funnel").trigger('click', [mothint]);
+            },100);
+            setTimeout(function() {   
+            if(isExpanded=="false"){
+                    //console.log(isExpanded);
+                }else{
+                    $(".sales_funnel").trigger('click', [mothint]);
+                }
+            },500);
+
+        }else{          
+            $('#tableData_table').hide();
+            $('#lead_conversion_table').show();
+            lead_conversion_fu(mothint);
+
+        }
+        
+       
+        
+    }); 
+    $('#effect_of_sales_year, #effect_of_sales_month').change(function(){
+        var isExpanded = $('.sales_funnel').attr("aria-expanded");
+        var year = <?php echo date("Y"); ?>;
+        var month = $('#effect_of_sales_month').val();
+        var mothint = 0;
+        if(month==""){
+            month= '-1';
+        }
+        var $html_data = "";
+        var d = new Date();
+            var n = d.getMonth();
+            var years_arr = ["January", "February", "March","April", "May", "June","July", "August", "September","October", "November", "December"];
+        $html_data = '<option value="">Select Month</option>';
+        if(this.value==year){
+            for (var z = 0; z <= n; z++) { 
+                $html_data += '<option value="'+z+'">'+years_arr[z]+'</option>';
+            }
+        }else{
+            for (var z = 0; z <= 11; z++) { 
+                $html_data += '<option value="'+z+'">'+years_arr[z]+'</option>';
+            }
+        }
+
+        $('#effect_of_sales_month').html($html_data);
+        mothint = parseInt(month)+1;
+        setTimeout(function() {   
+            $(".effect_of_sales").trigger('click', [mothint]);
+        },100);
+       
+        setTimeout(function() {   
+            if(isExpanded=="false"){
+                //console.log(isExpanded);
+            }else{
+                $(".effect_of_sales").trigger('click', [mothint]);
+            }
+        },500);
+    }); 
+
+    $('#month_of_sales_year, #month_of_sales_month').change(function(){
+        var isExpanded = $('.sales_funnel').attr("aria-expanded");
+        var year = <?php echo date("Y"); ?>;
+        var month = $('#effect_of_sales_month').val();
+        var mothint = 0;
+        if(month==""){
+            month= '-1';
+        }
+        var $html_data = "";
+        var d = new Date();
+            var n = d.getMonth();
+            var years_arr = ["January", "February", "March","April", "May", "June","July", "August", "September","October", "November", "December"];
+        $html_data = '<option value="">Select Month</option>';
+        if(this.value==year){
+            for (var z = 0; z <= n; z++) { 
+                $html_data += '<option value="'+z+'">'+years_arr[z]+'</option>';
+            }
+        }else{
+            for (var z = 0; z <= 11; z++) { 
+                $html_data += '<option value="'+z+'">'+years_arr[z]+'</option>';
+            }
+        }
+
+        $('#month_of_sales_month').html($html_data);
+        mothint = parseInt(month)+1;
+        setTimeout(function() {   
+            $(".month_of_sales").trigger('click', [mothint]);
+        },100);
+       
+        setTimeout(function() {   
+            if(isExpanded=="false"){
+                //console.log(isExpanded);
+            }else{
+                $(".month_of_sales").trigger('click', [mothint]);
+            }
+        },500);
+    }); 
+    
+</script>
+<script>
+//Added By Navin
+
+$(document).ready(function(){
+    function sales_funnel_fn(month){
+        var toggle_switch = "";
+        
+        var current_year = <?php echo date("Y"); ?>;
+        var year =  $('#sales_funnel_year').val();
+        if(month==undefined){
+            var month =  "";
+        }else{
+            var month =  month;
+        }
+        
+        var qryStr = '?year='+year+'&month='+month;
+        $datavalue = $('.logger').attr('data-value');
+        var sales_funnel_lead,total_sales_funnel_lead,sales_funnel_consultation,total_sales_funnel_consultation,sales_funnel_warm,total_sales_funnel_warm,sales_funnel_hot,total_sales_funnel_hot = "";
+        var isExpanded = $('.sales_funnel').attr("aria-expanded");
+        //console.log(isExpanded);//return false;
+        if(isExpanded=="false"){
+           var url = '<?php echo base_url(); ?>dashboard/sales_funnel';   
+            $.ajax({
+                url: url,
+                type: "POST",
+                data:{datavalue:$datavalue,month:month,year:year},
+                dataType: "JSON",
+                beforeSend: function () {
+                    $("#cover-spin").show();
+                },
+                success: function(result)
+                {  
+                    console.log(result);
+                    //Sales Funnel Start
+                        var ld_cap_html = "";
+                        var per = "";
+                        var effort_for_sales_html = "";
+                        var sales_funnel_lead = result.sales_funnel_lead;
+                        var total_sales_funnel_lead = result.sales_funnel_lead + result.sales_funnel_lead_team;
+                        if(result.sales_funnel_lead!=0 && result.total_sales_funnel_lead!=0){
+                           per = (sales_funnel_lead / total_sales_funnel_lead) * 100;
+                        }else{
+                            per = 0;
+                        }//if(result.sales_funnel_lead!=0 && result.total_sales_funnel_lead!=0){
+
+                        ld_cap_html += '<tr><th class="text-center text-dark">Leads</th><td class="text-center"><a href="javascript:void(0)">'+sales_funnel_lead+'</a></td><td class="text-center"><a href="javascript:void(0)">'+total_sales_funnel_lead+'</a></td><td class="text-center"><a href="javascript:void(0)">'+per.toFixed(2)+'%</a></td></tr>';
+
+                        var per_funnel_warm = "";
+                        var sales_funnel_consultation = result.sales_funnel_consultation;
+                        var total_sales_funnel_consultation = result.sales_funnel_consultation + result.sales_funnel_consultation_team;
+                        if(result.sales_funnel_consultation!=0 && result.total_sales_funnel_consultation!=0){
+                           per_consultation = (sales_funnel_consultation / total_sales_funnel_consultation) * 100;
+                        }else{
+                            per_consultation = 0;
+                        }//if(result.sales_funnel_consultation!=0 && result.total_sales_funnel_consultation!=0){
+
+                        ld_cap_html += '<tr><th class="text-center text-dark">Consultation</th><td class="text-center"><a href="javascript:void(0)">'+sales_funnel_consultation+'</a></td><td class="text-center"><a href="javascript:void(0)">'+total_sales_funnel_consultation+'</a></td><td class="text-center"><a href="javascript:void(0)">'+per_consultation.toFixed(2)+'%</a></td></tr>';
+
+                        var per_consultation = "";
+                        var sales_funnel_warm = result.sales_funnel_warm;
+                        var total_sales_funnel_warm = result.sales_funnel_warm + result.sales_funnel_warm_team;
+                        if(result.sales_funnel_warm!=0 && result.total_sales_funnel_warm!=0){
+                           per_funnel_warm = (sales_funnel_warm / total_sales_funnel_warm) * 100;
+                        }else{
+                            per_funnel_warm = 0;
+                        }//if(result.sales_funnel_warm!=0 && result.total_sales_funnel_warm!=0){
+
+                        ld_cap_html += '<tr><th class="text-center text-dark">Warm</th><td class="text-center"><a href="javascript:void(0)">'+sales_funnel_warm+'</a></td><td class="text-center"><a href="javascript:void(0)">'+total_sales_funnel_warm+'</a></td><td class="text-center"><a href="javascript:void(0)">'+per_funnel_warm.toFixed(2)+'%</a></td></tr>';
+
+                        var per_funnel_hot = "";
+                        var sales_funnel_hot = result.sales_funnel_hot;
+                        var total_sales_funnel_hot = result.sales_funnel_hot + result.sales_funnel_hot_team;
+                        if(result.sales_funnel_hot!=0 && result.total_sales_funnel_hot!=0){
+                           per_funnel_hot = (sales_funnel_hot / total_sales_funnel_hot) * 100;
+                        }else{
+                            per_funnel_hot = 0;
+                        }//if(result.sales_funnel_hot!=0 && result.total_sales_funnel_hot!=0){
+
+                        ld_cap_html += '<tr><th class="text-center text-dark">Hot</th><td class="text-center"><a href="javascript:void(0)">'+sales_funnel_hot+'</a></td><td class="text-center"><a href="javascript:void(0)">'+total_sales_funnel_hot+'</a></td><td class="text-center"><a href="javascript:void(0)">'+per_funnel_hot.toFixed(2)+'%</a></td></tr>';
+
+                        var per_funnel_sales = 0;
+                        if(result.sales_funnel_sales[0]['unit']!=0 && result.sales_funnel_sales_team[0]['unit']!=0){
+                           per_funnel_sales = (result.sales_funnel_sales[0]['unit'] / result.sales_funnel_sales_team[0]['unit']) * 100;
+                        }else{
+                            per_funnel_sales = 0;
+                        }//if(result.sales_funnel_sales[0]['unit']!=0 && result.sales_funnel_sales_team[0]['unit']!=0){
+
+                        ld_cap_html += '<tr><th class="text-center text-dark">Sales</th><td class="text-center"><a href="javascript:void(0)">Rs.'+result.sales_funnel_sales[0]['amt'] + ' | ' + result.sales_funnel_sales[0]['unit'] +'</a></td><td class="text-center"><a href="javascript:void(0)">Rs.'+result.sales_funnel_sales_team[0]['amt'] + ' | ' + result.sales_funnel_sales_team[0]['unit'] +'</a></td><td class="text-center"><a href="javascript:void(0)">'+per_funnel_sales.toFixed(2)+'%</a></td></tr>';
+
+                        $("#tableData").html(ld_cap_html);
+
+                        var $html_data = "";
+                        var d = new Date();
+                        var n = d.getMonth();
+                        var years_arr = ["January", "February", "March","April", "May", "June","July", "August", "September","October", "November", "December"];
+                        $html_data = '<option value="">Select Month</option>';
+                        if(current_year==year){
+                            var t;
+                            for (var z = 0; z <= n; z++) { 
+                                t = z+1;
+                                if(month==t){
+                                    $html_data += '<option value="'+z+'" selected>'+years_arr[z]+'</option>';
+                                }else{
+                                    $html_data += '<option value="'+z+'" >'+years_arr[z]+'</option>';
+                                }
+                                
+                            }
+                        }else{
+                            for (var z = 0; z <= 11; z++) { 
+                                if(month==z){
+                                    $html_data += '<option value="'+z+'" selected>'+years_arr[z]+'</option>';
+                                }else{
+                                    $html_data += '<option value="'+z+'" >'+years_arr[z]+'</option>';
+                                }
+                            }
+                        }
+                        $('#sales_funnel_month').html($html_data);
+                    //Sales Funnel End
+                    
+                },
+                complete:function(){
+                    $("#cover-spin").hide();
+                },
+                error: function(){}             
+            });
+        }//if(isExpanded=="false"){
+        
+    }
+    $('.sales_funnel').on('click',function(event, month){
+        
+        var current_year = <?php echo date("Y"); ?>;
+        var year =  $('#sales_funnel_year').val();
+        if(month==undefined){
+            var month =  "";
+        }else{
+            var month =  month;
+        }
+        
+        var qryStr = '?year='+year+'&month='+month;
+        $datavalue = $('.logger').attr('data-value');
+        var sales_funnel_lead,total_sales_funnel_lead,sales_funnel_consultation,total_sales_funnel_consultation,sales_funnel_warm,total_sales_funnel_warm,sales_funnel_hot,total_sales_funnel_hot = "";
+        var isExpanded = $('.sales_funnel').attr("aria-expanded");
+        //console.log(isExpanded);//return false;
+        if(isExpanded=="false"){
+           var url = '<?php echo base_url(); ?>dashboard/sales_funnel';   
+            $.ajax({
+                url: url,
+                type: "POST",
+                data:{datavalue:$datavalue,month:month,year:year},
+                dataType: "JSON",
+                beforeSend: function () {
+                    $("#cover-spin").show();
+                },
+                success: function(result)
+                {  
+                    console.log(result);
+                    //Sales Funnel Start
+                        var ld_cap_html = "";
+                        var per = "";
+                        var effort_for_sales_html = "";
+                        var sales_funnel_lead = result.sales_funnel_lead;
+                        var total_sales_funnel_lead = result.sales_funnel_lead + result.sales_funnel_lead_team;
+                        if(result.sales_funnel_lead!=0 && result.total_sales_funnel_lead!=0){
+                           per = (sales_funnel_lead / total_sales_funnel_lead) * 100;
+                        }else{
+                            per = 0;
+                        }//if(result.sales_funnel_lead!=0 && result.total_sales_funnel_lead!=0){
+
+                        ld_cap_html += '<tr><th class="text-center text-dark">Leads</th><td class="text-center"><a href="javascript:void(0)">'+sales_funnel_lead+'</a></td><td class="text-center"><a href="javascript:void(0)">'+total_sales_funnel_lead+'</a></td><td class="text-center"><a href="javascript:void(0)">'+per.toFixed(2)+'%</a></td></tr>';
+
+                        var per_funnel_warm = "";
+                        var sales_funnel_consultation = result.sales_funnel_consultation;
+                        var total_sales_funnel_consultation = result.sales_funnel_consultation + result.sales_funnel_consultation_team;
+                        if(result.sales_funnel_consultation!=0 && result.total_sales_funnel_consultation!=0){
+                           per_consultation = (sales_funnel_consultation / total_sales_funnel_consultation) * 100;
+                        }else{
+                            per_consultation = 0;
+                        }//if(result.sales_funnel_consultation!=0 && result.total_sales_funnel_consultation!=0){
+
+                        ld_cap_html += '<tr><th class="text-center text-dark">Consultation</th><td class="text-center"><a href="javascript:void(0)">'+sales_funnel_consultation+'</a></td><td class="text-center"><a href="javascript:void(0)">'+total_sales_funnel_consultation+'</a></td><td class="text-center"><a href="javascript:void(0)">'+per_consultation.toFixed(2)+'%</a></td></tr>';
+
+                        var per_consultation = "";
+                        var sales_funnel_warm = result.sales_funnel_warm;
+                        var total_sales_funnel_warm = result.sales_funnel_warm + result.sales_funnel_warm_team;
+                        if(result.sales_funnel_warm!=0 && result.total_sales_funnel_warm!=0){
+                           per_funnel_warm = (sales_funnel_warm / total_sales_funnel_warm) * 100;
+                        }else{
+                            per_funnel_warm = 0;
+                        }//if(result.sales_funnel_warm!=0 && result.total_sales_funnel_warm!=0){
+
+                        ld_cap_html += '<tr><th class="text-center text-dark">Warm</th><td class="text-center"><a href="javascript:void(0)">'+sales_funnel_warm+'</a></td><td class="text-center"><a href="javascript:void(0)">'+total_sales_funnel_warm+'</a></td><td class="text-center"><a href="javascript:void(0)">'+per_funnel_warm.toFixed(2)+'%</a></td></tr>';
+
+                        var per_funnel_hot = "";
+                        var sales_funnel_hot = result.sales_funnel_hot;
+                        var total_sales_funnel_hot = result.sales_funnel_hot + result.sales_funnel_hot_team;
+                        if(result.sales_funnel_hot!=0 && result.total_sales_funnel_hot!=0){
+                           per_funnel_hot = (sales_funnel_hot / total_sales_funnel_hot) * 100;
+                        }else{
+                            per_funnel_hot = 0;
+                        }//if(result.sales_funnel_hot!=0 && result.total_sales_funnel_hot!=0){
+
+                        ld_cap_html += '<tr><th class="text-center text-dark">Hot</th><td class="text-center"><a href="javascript:void(0)">'+sales_funnel_hot+'</a></td><td class="text-center"><a href="javascript:void(0)">'+total_sales_funnel_hot+'</a></td><td class="text-center"><a href="javascript:void(0)">'+per_funnel_hot.toFixed(2)+'%</a></td></tr>';
+
+                        var per_funnel_sales = 0;
+                        if(result.sales_funnel_sales[0]['unit']!=0 && result.sales_funnel_sales_team[0]['unit']!=0){
+                           per_funnel_sales = (result.sales_funnel_sales[0]['unit'] / result.sales_funnel_sales_team[0]['unit']) * 100;
+                        }else{
+                            per_funnel_sales = 0;
+                        }//if(result.sales_funnel_sales[0]['unit']!=0 && result.sales_funnel_sales_team[0]['unit']!=0){
+
+                        ld_cap_html += '<tr><th class="text-center text-dark">Sales</th><td class="text-center"><a href="javascript:void(0)">Rs.'+result.sales_funnel_sales[0]['amt'] + ' | ' + result.sales_funnel_sales[0]['unit'] +'</a></td><td class="text-center"><a href="javascript:void(0)">Rs.'+result.sales_funnel_sales_team[0]['amt'] + ' | ' + result.sales_funnel_sales_team[0]['unit'] +'</a></td><td class="text-center"><a href="javascript:void(0)">'+per_funnel_sales.toFixed(2)+'%</a></td></tr>';
+
+                        $("#tableData").html(ld_cap_html);
+
+                        var $html_data = "";
+                        var d = new Date();
+                        var n = d.getMonth();
+                        var years_arr = ["January", "February", "March","April", "May", "June","July", "August", "September","October", "November", "December"];
+                        $html_data = '<option value="">Select Month</option>';
+                        if(current_year==year){
+                            var t;
+                            for (var z = 0; z <= n; z++) { 
+                                t = z+1;
+                                if(month==t){
+                                    $html_data += '<option value="'+z+'" selected>'+years_arr[z]+'</option>';
+                                }else{
+                                    $html_data += '<option value="'+z+'" >'+years_arr[z]+'</option>';
+                                }
+                                
+                            }
+                        }else{
+                            for (var z = 0; z <= 11; z++) { 
+                                if(month==z){
+                                    $html_data += '<option value="'+z+'" selected>'+years_arr[z]+'</option>';
+                                }else{
+                                    $html_data += '<option value="'+z+'" >'+years_arr[z]+'</option>';
+                                }
+                            }
+                        }
+                        $('#sales_funnel_month').html($html_data);
+                    //Sales Funnel End
+                    
+                },
+                complete:function(){
+                    $("#cover-spin").hide();
+                },
+                error: function(){}             
+            });
+        }//if(isExpanded=="false"){
+        
+    });//$('.sales_funnel').on('click',function(){
+
+});
+
+$(document).ready(function(){
+    
+    $('.effect_of_sales').on('click',function(event, month){
+        var current_year = <?php echo date("Y"); ?>;
+        var year =  $('#sales_funnel_year').val();
+        //console.log(month);
+        if(month==undefined){
+            var month =  <?php echo date('n'); ?>;
+        }else{
+            var month =  month;
+        }
+        var sales_funnel_lead,total_sales_funnel_lead,sales_funnel_consultation,total_sales_funnel_consultation,sales_funnel_warm,total_sales_funnel_warm,sales_funnel_hot,total_sales_funnel_hot = "";
+        $datavalue = $('.logger').attr('data-value');
+        var isExpanded = $('.effect_of_sales').attr("aria-expanded");
+        //console.log(isExpanded);//return false;
+        if(isExpanded=="false"){
+           var url = '<?php echo base_url(); ?>dashboard/effort_for_sales';   
+            $.ajax({
+                url: url,
+                type: "POST",
+                data:{datavalue:$datavalue,month:month,year:year},
+                dataType: "JSON",
+                beforeSend: function () {
+                    $("#cover-spin").show();
+                },
+                success: function(result)
+                {  
+                    //Effort for sales
+                        var effort_for_sales_html = "";
+                        var today = new Date();
+                        var dd = String(today.getDate()).padStart(2, '0');
+                        var per_avg_calls_team = per_avg_calls = avg_calls_team = avg_calls = avg_time_hot = avg_time_hot_team = avg_sale_time = avg_sale_time_team = 0;
+                        
+                        if(result.sales_funnel_sales[0]['unit']>0){
+                           per_avg_calls_team = Math.ceil(result.avg_calls / result.sales_funnel_sales_team[0]['unit']);
+                           per_avg_calls = Math.ceil(result.avg_calls / result.sales_funnel_sales[0]['unit']);
+                        }
+
+                        effort_for_sales_html += '<tr><th class="text-center text-dark">Avg calls for a sale</th><td class="text-center"><a href="javascript:void(0)">'+per_avg_calls+'</a></td><td class="text-center"><a href="javascript:void(0)">'+per_avg_calls_team+'</a></td></tr>';
+                        if(result.avg_calls>0){
+                            avg_calls = Math.ceil(result.avg_calls / dd);
+                            avg_calls_team = Math.ceil(result.avg_calls_team / dd);
+                        }
+                        effort_for_sales_html += '<tr><th class="text-center text-dark">Avg calls per day</th><td class="text-center"><a href="javascript:void(0)">'+avg_calls+'</a></td><td class="text-center"><a href="javascript:void(0)">'+avg_calls_team+'</a></td></tr>';
+                        
+                        effort_for_sales_html += '<tr><th class="text-center text-dark">Avg day to close hot</th><td class="text-center"><a href="javascript:void(0)">'+avg_time_hot+'</a></td><td class="text-center"><a href="javascript:void(0)">'+avg_time_hot_team+'</a></td></tr>';
+                        effort_for_sales_html += '<tr><th class="text-center text-dark">Avg day to close a sale</th><td class="text-center"><a href="javascript:void(0)">'+avg_sale_time+'</a></td><td class="text-center"><a href="javascript:void(0)">'+avg_sale_time_team+'</a></td></tr>';
+                        
+                        $("#tableDataEFS").html(effort_for_sales_html);
+
+
+                        var $html_data = "";
+                        var d = new Date();
+                        var n = d.getMonth();
+                        var years_arr = ["January", "February", "March","April", "May", "June","July", "August", "September","October", "November", "December"];
+                        $html_data = '<option value="">Select Month</option>';
+                        if(current_year==year){
+                            var t;
+                            for (var z = 0; z <= n; z++) { 
+                                t = z+1;
+                                if(month==t){
+                                    $html_data += '<option value="'+z+'" selected>'+years_arr[z]+'</option>';
+                                }else{
+                                    $html_data += '<option value="'+z+'" >'+years_arr[z]+'</option>';
+                                }
+                                
+                            }
+                        }else{
+                            for (var z = 0; z <= 11; z++) { 
+                                if(month==z){
+                                    $html_data += '<option value="'+z+'" selected>'+years_arr[z]+'</option>';
+                                }else{
+                                    $html_data += '<option value="'+z+'" >'+years_arr[z]+'</option>';
+                                }
+                            }
+                        }
+                        $('#effect_of_sales_month').html($html_data);
+                    //Effort for sales
+                    
+                },
+                complete:function(){
+                    $("#cover-spin").hide();
+                },
+                error: function(){}             
+            });
+        }//if(isExpanded=="false"){
+        
+    });//$('.sales_funnel').on('click',function(){
+
+});//, .effect_of_sales
+    
+
+$(document).ready(function(){
+    
+    $('.month_of_sales').on('click',function(event, month){
+        var current_year = <?php echo date("Y"); ?>;
+        var year =  $('#sales_funnel_year').val();
+        if(month==undefined){
+            var month =  "";
+        }else{
+            var month =  month;
+        }
+        var isExpanded = $('.month_of_sales').attr("aria-expanded");
+        $datavalue = $('.logger').attr('data-value');
+        if(isExpanded=="false"){
+            var url = '<?php echo base_url(); ?>dashboard/month_sales_report';   
+            $.ajax({
+                url: url,
+                type: "POST",
+                data:{datavalue:$datavalue,month:month,year:year},
+                dataType: "JSON",
+                beforeSend: function () {
+                    $("#cover-spin").show();
+                },
+                success: function(result)
+                {  
+                    var month_sales_html = "";
+                    var per = "";
+                    var bs_sales_amt = result.bs_sales[0]['amt'];
+                    var bs_sales_unit = result.bs_sales[0]['unit'];
+                    var bs_renewal_amt = result.bs_renewal[0]['amt'];
+                    var bs_renewal_unit = result.bs_renewal[0]['unit'];
+                    var advance_sales_amt = result.advance_sales[0]['amt'];
+                    var advance_sales_unit = result.advance_sales[0]['unit'];
+                    var bs_upgrade_amt = result.bs_upgrade[0]['amt'];
+                    var bs_upgrade_unit = result.bs_upgrade[0]['unit'];
+                    var sum_amt = (parseInt(bs_sales_amt) + parseInt(bs_renewal_amt)) + (parseInt(advance_sales_amt) + parseInt(bs_upgrade_amt));
+                    var sum_unit = (parseInt(bs_sales_unit) + parseInt(bs_renewal_unit)) + (parseInt(advance_sales_unit) + parseInt(bs_upgrade_unit));
+                    
+                    var bs_your_sales_amt = result.bs_your_sales[0]['amt'];
+                    if(bs_your_sales_amt==null){
+                       bs_your_sales_amt = 0;
+                    }
+                    var bs_your_sales_unit = result.bs_your_sales[0]['unit'];
+                    var bs_your_renewal_amt = result.bs_your_renewal[0]['amt'];
+                    if(bs_your_renewal_amt==null){
+                       bs_your_renewal_amt = 0;
+                    }
+                    var bs_your_renewal_unit = result.bs_your_renewal[0]['unit'];
+                    var advance_sales_your_amt = result.advance_sales_your[0]['amt'];
+                    if(advance_sales_your_amt==null){
+                       advance_sales_your_amt = 0;
+                    }
+                    var advance_sales_your_unit = result.advance_sales_your[0]['unit'];
+                    var bs_upgrade_your_amt = result.bs_upgrade_your[0]['amt'];
+                    if(bs_upgrade_your_amt==null){
+                       bs_upgrade_your_amt = 0;
+                    }
+                    var bs_upgrade_your_unit = result.bs_upgrade_your[0]['unit'];
+                    var sum_amt_your = (parseInt(bs_your_sales_amt) + parseInt(bs_your_renewal_amt)) + (parseInt(advance_sales_your_amt) + parseInt(bs_upgrade_your_amt));
+                    var sum_unit_your = (parseInt(bs_your_sales_unit) + parseInt(bs_your_renewal_unit)) + (parseInt(advance_sales_your_unit) + parseInt(bs_upgrade_your_unit));
+                    
+                    month_sales_html += '<tr><th class="text-center text-dark">Basic Stack Sales</th><td class="text-center"><a href="javascript:void(0)">Rs.'+bs_your_sales_amt+' | '+bs_your_sales_unit+'</a></td><td class="text-center"><a href="javascript:void(0)">Rs.'+bs_sales_amt+' | '+bs_sales_unit+'</a></td></tr>';
+                    
+                    month_sales_html += '<tr><th class="text-center text-dark">Basic Stack Renewal</th><td class="text-center"><a href="javascript:void(0)">Rs.'+bs_your_renewal_amt+' | '+bs_your_renewal_unit+'</a></td><td class="text-center"><a href="javascript:void(0)">Rs. '+bs_renewal_amt+' | '+bs_renewal_unit+'</a></td></tr>';
+                    
+                    month_sales_html += '<tr><th class="text-center text-dark">Special Program Sales</th><td class="text-center"><a href="javascript:void(0)">Rs.'+advance_sales_your_amt+' | '+advance_sales_your_unit+'</a></td><td class="text-center"><a href="javascript:void(0)">Rs.'+advance_sales_amt+' | '+advance_sales_unit+'</a></td></tr>';
+                    
+                    month_sales_html += '<tr><th class="text-center text-dark">Basic To Upgrade</th><td class="text-center"><a href="javascript:void(0)">Rs.'+bs_upgrade_your_amt+' | '+bs_upgrade_your_unit+'</a></td><td class="text-center"><a href="javascript:void(0)">Rs.'+bs_upgrade_amt+' | '+bs_upgrade_unit+'</a></td></tr>';
+                    
+                    month_sales_html += '<tr><th class="text-center text-dark">Total</th><td class="text-center"><a href="javascript:void(0)">Rs.'+sum_amt_your+' | '+sum_unit_your+'</a></td><td class="text-center"><a href="javascript:void(0)">Rs. '+sum_amt+' | '+sum_unit+'</a></td></tr>';
+                    
+                    $("#month_of_sales").html(month_sales_html);
+
+                    var $html_data = "";
+                    var d = new Date();
+                    var n = d.getMonth();
+                    var years_arr = ["January", "February", "March","April", "May", "June","July", "August", "September","October", "November", "December"];
+                    $html_data = '<option value="">Select Month</option>';
+                    if(current_year==year){
+                        var t;
+                        for (var z = 0; z <= n; z++) { 
+                            t = z+1;
+                            if(month==t){
+                                $html_data += '<option value="'+z+'" selected>'+years_arr[z]+'</option>';
+                            }else{
+                                $html_data += '<option value="'+z+'" >'+years_arr[z]+'</option>';
+                            }
+                            
+                        }
+                    }else{
+                        for (var z = 0; z <= 11; z++) { 
+                            if(month==z){
+                                $html_data += '<option value="'+z+'" selected>'+years_arr[z]+'</option>';
+                            }else{
+                                $html_data += '<option value="'+z+'" >'+years_arr[z]+'</option>';
+                            }
+                        }
+                    }
+                    $('#month_of_sales_month').html($html_data);
+
+                },
+                complete:function(){
+                    $("#cover-spin").hide();
+                },
+                error: function(){}             
+            });
+        }//if(isExpanded=="false"){
+    });
+});
+ function lead_conversion_fu(month){
+    var current_year = <?php echo date("Y"); ?>;
+    var year =  $('#sales_funnel_year').val();
+    if(month==undefined){
+        var month =  "";
+    }else{
+        var month =  month;
+    }
+    $datavalue = $('.logger').attr('data-value');
+    var url = '<?php echo base_url(); ?>dashboard/lead_conversion_data';   
+    $.ajax({
+        url: url,
+        type: "POST",
+        data:{datavalue:$datavalue,month:month,year:year},
+        dataType: "JSON",
+        beforeSend: function () {
+            $("#cover-spin").show();
+        },
+        success: function(result)
+        {  
+            var lead_conversion_html = "";
+            //Hot
+            var per_lead = 0;
+            if(result.sales_self_lead!=0 && result.lc_self_lead!=0){
+               //per_lead = (result.lc_self_lead / result.sales_self_lead) * 100;
+               per_lead = ( result.sales_self_lead / result.lc_self_lead) * 100;
+            }else{
+                per_lead = 0;
+            }
+            var per_other_lead = 0;
+            if(result.sales_other_lead!=0 && result.lc_other_lead!=0){
+               //per_other_lead = (result.lc_other_lead / result.sales_other_lead) * 100;
+               per_other_lead = ( result.sales_other_lead / result.lc_other_lead ) * 100;
+            }else{
+                per_other_lead = 0;
+            }
+
+            ///Warm
+            var per_warm_lead = 0;
+            if(result.sales_self_warm!=0 && result.lc_self_warm!=0){
+               //per_warm_lead = (result.lc_self_warm / result.sales_self_warm) * 100;
+               per_warm_lead = ( result.sales_self_warm / result.lc_self_warm ) * 100;
+            }else{
+                per_warm_lead = 0;
+            }
+
+             var per_other_warm_lead = 0;
+            if(result.sales_other_warm!=0 && result.lc_other_warm!=0){
+               //per_other_warm_lead = (result.lc_other_warm / result.sales_other_warm) * 100;
+               per_other_warm_lead = (result.sales_other_warm / result.lc_other_warm) * 100;
+            }else{
+                per_other_warm_lead = 0;
+            }
+
+            ///Hot
+            var per_hot_lead = 0;
+            if(result.sales_self_hot!=0 && result.lc_self_hot!=0){
+               //per_hot_lead = (result.lc_self_hot / result.sales_self_hot) * 100;
+               per_hot_lead = (result.sales_self_hot / result.lc_self_hot) * 100;
+            }else{
+                per_hot_lead = 0;
+            }
+
+            var per_other_hot_lead = 0;
+            if(result.sales_other_hot!=0 && result.lc_other_hot!=0){
+               //per_other_hot_lead = (result.lc_other_hot / result.sales_other_hot) * 100;
+               per_other_hot_lead = ( result.sales_other_hot / result.lc_other_hot) * 100;
+            }else{
+                per_other_hot_lead = 0;
+            }
+            ///self_consultation
+            var per_self_consultation_lead = 0;
+            if(result.sales_self_consultation!=0 && result.lc_self_consultation!=0){
+               //per_self_consultation_lead = (result.lc_self_consultation / result.sales_self_consultation) * 100;
+               per_self_consultation_lead = ( result.sales_self_consultation / result.lc_self_consultation) * 100;
+            }else{
+                per_self_consultation_lead = 0;
+            }
+
+            var per_other_self_consultation_lead = 0;
+            if(result.sales_other_consultation!=0 && result.lc_other_consultation!=0){
+               //per_other_self_consultation_lead = (result.lc_other_consultation / result.sales_other_consultation) * 100;
+               per_other_self_consultation_lead = ( result.sales_other_consultation / result.lc_other_consultation) * 100;
+            }else{
+                per_other_self_consultation_lead = 0;
+            }
+            lead_conversion_html += '<tr><th class="text-center text-dark">Current lead</th><td class="text-center"><a href="javascript:void(0)">'+per_lead.toFixed(2)+'%</a></td><td class="text-center"><a href="javascript:void(0)">'+per_other_lead.toFixed(2)+'%</a></td></tr><tr><th class="text-center text-dark">Warm lead</th><td class="text-center"><a href="javascript:void(0)">'+per_warm_lead.toFixed(2)+'%</a></td><td class="text-center"><a href="javascript:void(0)">'+per_other_warm_lead.toFixed(2)+'%</a></td></tr><tr><th class="text-center text-dark">Hot lead</th><td class="text-center"><a href="javascript:void(0)">'+per_hot_lead.toFixed(2)+'%</a></td><td class="text-center"><a href="javascript:void(0)">'+per_other_hot_lead.toFixed(2)+'%</a></td></tr><tr><th class="text-center text-dark">Consultation</th><td class="text-center"><a href="javascript:void(0)">'+per_self_consultation_lead.toFixed(2)+'%</a></td><td class="text-center"><a href="javascript:void(0)">'+per_other_self_consultation_lead.toFixed(2)+'%</a></td></tr>';
+            //console.log(month_sales_html);
+            $("#lead_conversion").html(lead_conversion_html);
+            var $html_data = "";
+            var d = new Date();
+            var n = d.getMonth();
+            var years_arr = ["January", "February", "March","April", "May", "June","July", "August", "September","October", "November", "December"];
+            $html_data = '<option value="">Select Month</option>';
+            if(current_year==year){
+                var t;
+                for (var z = 0; z <= n; z++) { 
+                    t = z+1;
+                    if(month==t){
+                        $html_data += '<option value="'+z+'" selected>'+years_arr[z]+'</option>';
+                    }else{
+                        $html_data += '<option value="'+z+'" >'+years_arr[z]+'</option>';
+                    }
+                    
+                }
+            }else{
+                for (var z = 0; z <= 11; z++) { 
+                    if(month==z){
+                        $html_data += '<option value="'+z+'" selected>'+years_arr[z]+'</option>';
+                    }else{
+                        $html_data += '<option value="'+z+'" >'+years_arr[z]+'</option>';
+                    }
+                }
+            }
+            $('#effect_of_sales_month').html($html_data);
+
+        },
+        complete:function(){
+            $("#cover-spin").hide();
+        },
+        error: function(){}             
+    });
+ }   
+$(document).ready(function(){
+    setTimeout(function() {   
+        $(".sales_funnel, .month_of_sales").trigger('click', [<?php echo date('n'); ?>]);
+    },100);
+    /*$('#lead_conversion_table').hide(); 
+    $('#tableData_table').hide();*/
+    /*setTimeout(function() {
+        $(".toggle").trigger('click');
+    },1000);*/
+    $('.toggle').on('click',function(){
+        var year = <?php echo date("Y"); ?>;
+        var month = $('#sales_funnel_month').val();
+        var mothint = 0;
+        if(month==""){
+            month= '-1';
+        }
+        mothint = parseInt(month)+1;
+        var toggle_switch = "";
+        toggle_switch = $('input:radio[name="toggle"]:checked').val();
+        
+        if(toggle_switch=="false"){
+            $('#lead_conversion_table').hide(); 
+            $('#tableData_table').show();
+            sales_funnel_fn(mothint);
+
+        }else{          
+            $('#tableData_table').hide();
+            $('#lead_conversion_table').show();
+            lead_conversion_fu(mothint);
+            
+        }
+    });
+    $('.closeBtn').on('click',function(){
+        console.log('close');
+        $(".sales_funnel, .month_of_sales").trigger('click', [<?php echo date('n'); ?>])
+        setTimeout(function() {
+            $(".sales_funnel, .month_of_sales").trigger('click', [<?php echo date('n'); ?>]);
+        },1000);
+    });
+});
+</script>
+<script>
+//setTimeout(function() { 
+  var select2 = new MSFmultiSelect(
+    document.querySelector('#multiselect2'),
+    {
+      theme: 'theme2',
+      selectAll: false,
+      searchBox: true,
+      width: '1051px',
+      height: '35px',
+      // readOnly: true,
+      onChange:function(checked, value, instance) {
+        var data_val = $('.logger').attr('data-value');
+        //console.log('nav'+checked,value,instance);
+        if(data_val!=""){
+            console.log('if'+value);
+            $(".sales_funnel, .month_of_sales").trigger('click', [<?php echo date('n'); ?>]);
+            setTimeout(function() {
+                $(".sales_funnel, .month_of_sales").trigger('click', [<?php echo date('n'); ?>]);
+            },1000);
+        }else{
+            console.log('else'+value);
+            $(".sales_funnel, .month_of_sales").trigger('click', [<?php echo date('n'); ?>]);
+            setTimeout(function() {
+                $(".sales_funnel, .month_of_sales").trigger('click', [<?php echo date('n'); ?>]);
+            },1000);
+        }
+      },
+      // appendTo: '#myselect',
+      //readOnly:true,
+      //autoHide: false
+    }
+  );
+    /*$('.closeBtn').on('click',function(){
+        console.log('close');
+        $(".sales_funnel, .month_of_sales").trigger('click')
+        setTimeout(function() {
+            $(".sales_funnel, .month_of_sales").trigger('click');
+        },1000);
+    });*/
+//},200);
+
+</script>

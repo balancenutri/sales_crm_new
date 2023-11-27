@@ -1,0 +1,2179 @@
+<?php defined('BASEPATH') OR exit('No direct script access allowed');
+
+class Dashboard_model extends CI_Model
+{
+    public function __construct() 
+    {
+        parent::__construct(); 
+        // $this->load->library('query');
+    }
+    
+    public function get_lead_details_data_query()
+    {
+        /* function get_lead_details_data_query : starts here */
+        // https://www.balancenutrition.in/sales_crm/lead?lead_by=all&search=name&df=2021-03-18&dt=2021-03-19&agf=20&agt=35
+        //lead_by => show lead
+        //search => search string
+        //df  => date from
+        //dt   => date to
+        //agf  => age from
+        //agt => age to
+        // echo "<pre>";
+        // print_r($get_parameters);
+        // exit;
+        
+        // (
+        //                 CASE WHEN lm.gender != '' THEN CONCAT(lm.gender,' | ',lm.age,' yrs') ELSE 'NA'
+        //             END
+        //         ) as gender,
+
+        $sql= "SELECT
+                    lm.id,
+                    CONCAT(lm.fname, ' ', lm.lname) AS name,
+                    (
+                            CASE WHEN lm.gender != '' THEN lm.gender ELSE 'NA'
+                        END
+                    ) AS gender,
+                    (
+                        CASE WHEN lm.age != '' THEN CONCAT(lm.age, ' yrs') ELSE 'NA'
+                    END
+                    ) AS lead_age,
+                    lm.email,
+                    lm.phone,
+                    lm.stage,
+                    (
+                        CASE WHEN lm.body_mass_index != '' OR lm.body_mass_index IS NOT NULL THEN 'Yes' ELSE 'No'
+                    END
+                    ) AS bmi,
+                    (
+                        CASE WHEN LENGTH(lm.phone) > 5 THEN 'Yes' ELSE 'No'
+                    END
+                    ) AS phone_no,
+                    mobile_verified AS verify,
+                    DATE_FORMAT(lm.created, '%D %b %Y') AS created_date,
+                    la.assign_to,
+                    lm.enquiry_from AS lead_source,
+                    (
+                        SELECT
+                            GROUP_CONCAT(enquiry_from)
+                        FROM
+                            lead_management
+                        WHERE
+                            email = lm.email
+                        ORDER BY
+                            id
+                        DESC
+                    ) AS all_source,
+                    lm.status AS lead_status,
+                    lm.weight,
+                    lm.ideal_weight,
+                    lm.body_mass_index,
+                    lm.age,
+                    lm.overall_health_score,
+                    lm.health_category,
+                    (
+                        CASE WHEN(
+                        SELECT
+                            DATE(created)
+                        FROM
+                            lead_management
+                        WHERE
+                            email = lm.email AND id != lm.id
+                        ORDER BY
+                            id
+                        DESC
+                    LIMIT 1
+                    ) <(
+                        DATE(lm.created) - INTERVAL 30 DAY
+                    ) THEN 'OLR' ELSE 'NEW'
+                    END
+                    ) AS lead_type, CASE WHEN consultation = 1 THEN 'Yes' ELSE 'No'
+                    END AS consultation,(
+                        SELECT
+                            GROUP_CONCAT(health_issue)
+                        FROM
+                            `bn_app_hs_issue`
+                        WHERE
+                            health_score_id = lm.id
+                    ) AS health_issues
+                    FROM
+                        `lead_management` lm
+                    LEFT JOIN lead_action la ON
+                        lm.email = la.email
+                    WHERE
+                        lm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01') AND lm.email NOT IN(
+                        SELECT
+                            email_id
+                        FROM
+                            order_details
+                    )
+                    GROUP BY
+                        lm.email
+                    ORDER BY
+                        `lm`.`id`
+                DESC";
+
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return $query->result_array();
+        }else{
+            return [];
+        }
+
+        /* function get_lead_details_data_query : ends here   */
+    }
+
+    public function get_lead_capture_count_query($param){
+    
+        if($param==0){      
+            $sub_query_condition = "lm.created > CURDATE() - INTERVAL 30 DAY AND "; 
+            $query_condition = " AND created > CURDATE() - INTERVAL 30 DAY ";
+        }elseif($param==1){
+            $sub_query_condition = " DATE(lm.created) = CURDATE() AND ";        
+            $query_condition = " AND DATE(created) = CURDATE() ";
+        }elseif($param==2){
+            $sub_query_condition = "lm.created >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND ";     
+            $query_condition = " AND created >= DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+        }
+                            
+        $sql ="SELECT
+                    email
+                FROM
+                    lead_management
+                WHERE
+                    phone != '' AND CHAR_LENGTH(phone) > 4 AND email NOT IN(
+                    SELECT
+                        lm.email
+                    FROM
+                        lead_management lm,
+                        lead_action la
+                    WHERE
+                        lm.email = la.email AND ".$sub_query_condition." la.assign_to != ''
+                    GROUP BY
+                        lm.email) AND email NOT IN(
+                        SELECT
+                            email_id
+                        FROM
+                            order_details
+                    ) ".$query_condition."
+                GROUP BY
+                    email";
+        
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    //added by Navin start
+    public function get_lead_capture_stage_count_query($param, $stage_count=false){
+    
+        if($param==0){      
+            $sub_query_condition = "lm.created > CURDATE() - INTERVAL 30 DAY AND "; 
+            $query_condition = " AND created > CURDATE() - INTERVAL 30 DAY ";
+        }elseif($param==1){
+            $sub_query_condition = " DATE(lm.created) = CURDATE() AND ";        
+            $query_condition = " AND DATE(created) = CURDATE() ";
+        }elseif($param==2){
+            $sub_query_condition = "lm.created >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND ";     
+            $query_condition = " AND created >= DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+        }
+        $whrClause = "";
+        if($stage_count!=false){
+            switch($stage_count){      
+                case 1:      
+                    $whrClause = " AND stage = 1 ";     
+                    break;      
+                case 2:      
+                    $whrClause = " AND stage = 2 ";       
+                    break;      
+                case 3:      
+                    $whrClause = " AND stage = 3 ";    
+                    break; 
+                case 4:      
+                    $whrClause = " AND stage = 4 ";    
+                    break; 
+                default:      
+                    $whrClause = " ";     
+            }//switch($stage_count){      
+        }else{
+            $whrClause = " ";
+        }//if($stage_count!=false){
+                            
+        $sql ="SELECT
+                    email
+                FROM
+                    lead_management
+                WHERE
+                    phone != '' AND CHAR_LENGTH(phone) > 4 AND email NOT IN(
+                    SELECT
+                        lm.email
+                    FROM
+                        lead_management lm,
+                        lead_action la
+                    WHERE
+                        lm.email = la.email AND ".$sub_query_condition." la.assign_to != ''
+                    GROUP BY
+                        lm.email) AND email NOT IN(
+                        SELECT
+                            email_id
+                        FROM
+                            order_details
+                    ) ".$query_condition.$whrClause."
+                GROUP BY
+                    email";
+        
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }//public function get_lead_capture_stage_count_query($param){
+    //added by Navin end
+    public function get_lead_capture_stagewise_count_query($param){
+    
+        if($param==0){
+            $where_condition=" AND DATE(created) = CURDATE() ";
+        }elseif($param==1){
+            $where_condition=" AND created >= DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+        }
+        //New Leads
+        //echo 
+            $sql1=  "SELECT
+                    stage
+                FROM
+                    `lead_management` 
+                WHERE
+                    phone != '' AND CHAR_LENGTH(phone) > 4 AND id NOT IN (SELECT id FROM lead_management ldm WHERE (SELECT DATE(created) FROM lead_management WHERE email = ldm.email AND id != ldm.id ORDER BY id DESC LIMIT 1) < (DATE(ldm.created) - INTERVAL 30 DAY) AND ldm.created > DATE_FORMAT(CURDATE(), '%Y-%m-01')) ".$where_condition." AND
+                    email NOT IN(
+                    SELECT
+                        lm.email
+                    FROM
+                        lead_management lm,
+                        lead_action la
+                    WHERE
+                        lm.email = la.email  ".$where_condition." AND la.assign_to != ''
+                    GROUP BY
+                        lm.email) AND email NOT IN(
+                        SELECT
+                            email_id
+                        FROM
+                            order_details
+                    )
+                GROUP BY
+                    email";//exit;
+        $query=$this->db->query($sql1);
+        /*
+        
+        if($param==0){      
+            $sub_query_condition = "lm.created > CURDATE() - INTERVAL 30 DAY AND "; 
+            $query_condition = " AND created > CURDATE() - INTERVAL 30 DAY ";
+        }elseif($param==1){
+            $sub_query_condition = " DATE(lm.created) = CURDATE() AND ";        
+            $query_condition = " AND DATE(created) = CURDATE() ";
+        }elseif($param==2){
+            $sub_query_condition = "lm.created >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND ";     
+            $query_condition = " AND created >= DATE_FORMAT(CURDATE(), '%Y-%m-01') ";
+        }
+                            
+        $sql ="SELECT
+                    email
+                FROM
+                    lead_management
+                WHERE
+                    phone != '' AND CHAR_LENGTH(phone) > 4 AND email NOT IN(
+                    SELECT
+                        lm.email
+                    FROM
+                        lead_management lm,
+                        lead_action la
+                    WHERE
+                        lm.email = la.email AND ".$sub_query_condition." la.assign_to != ''
+                    GROUP BY
+                        lm.email) AND email NOT IN(
+                        SELECT
+                            email_id
+                        FROM
+                            order_details
+                    ) ".$query_condition."
+                GROUP BY
+                    email";
+        
+        */
+        //OLR
+        $sql2=  "SELECT
+                    lm.stage
+                FROM
+                    `lead_management` lm
+                WHERE
+                    phone != '' AND CHAR_LENGTH(phone) > 4 AND (SELECT DATE(created) FROM lead_management WHERE email = lm.email AND id != lm.id ORDER BY id DESC LIMIT 1) < (DATE(lm.created) - INTERVAL 30 DAY) ".$where_condition." AND 
+                    email NOT IN(
+                    SELECT
+                        lmd.email
+                    FROM
+                        lead_management lmd,
+                        lead_action la
+                    WHERE
+                        lmd.email = la.email  ".$where_condition." AND la.assign_to != ''
+                    GROUP BY
+                        lmd.email) AND email NOT IN(
+                        SELECT
+                            email_id
+                        FROM
+                            order_details
+                    )
+                GROUP BY
+                    lm.email";
+                
+        $query1=$this->db->query($sql2);
+        
+        $data['new_lead'] = $query->result_array();
+        $data['olr']=$query1->result_array();
+        //echo "<pre>";print_r($data);exit;
+        if($query->num_rows()>0){
+            return $data;
+        }else{
+            return 0;
+        }
+    }
+    
+    public function get_omr_lead($param){
+        if($param==0){
+            $date_condition = " DATE(lm.created) = CURDATE()  ";
+        }elseif($param==1){
+            $date_condition = " DATE(lm.created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')  ";
+        }
+        //$date_condition = " DATE(lm.created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')  ";
+        $sql = "SELECT lm.id FROM lead_management lm LEFT JOIN lead_action la ON lm.email=la.email WHERE ".$date_condition."
+                    AND lm.phone !='' AND LENGTH(lm.phone) > 4 
+                    AND lm.email IN (select email_id from order_details where program_status NOT IN(0,1,2,4))
+                    AND lm.email NOT IN (select email_id from order_details where program_status IN ('1','4')) 
+                    AND la.assign_date < (select DATE(created) from lead_management where email=lm.email order by id desc limit 1)
+                    group by lm.email";
+                    
+        //echo $sql;exit;
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    
+    public function get_lead_captured($param,$assign){
+        $name = $this->session->balance_session['first_name'];
+        if($param==0){
+            $date_condition = " DATE(la.assign_date) = CURDATE()  ";
+        }elseif($param==1){
+            $date_condition = " la.assign_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')  ";
+        }
+        if($assign==0){
+            $assign_condition = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(la.assign_from) IN('".strtolower($name)."','') AND ";
+        }elseif($assign==1){
+            $assign_condition = " LCASE(la.assign_to) ='".strtolower($name)."' AND LCASE(la.assign_from) NOT IN('".strtolower($name)."','') AND ";
+        }
+        
+        $sql = "SELECT
+                    lm.id
+                FROM
+                    `lead_management` lm
+                LEFT JOIN lead_action la ON
+                    lm.email = la.email
+                WHERE ".$assign_condition.$date_condition."  
+                AND lm.email NOT IN(
+                    SELECT
+                        email_id
+                    FROM
+                        order_details
+                )
+                GROUP BY
+                    lm.email
+                ORDER BY
+                    `lm`.`id`
+                DESC";//die;
+
+        //exit;     
+//      print_r($sql);
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    
+    public function get_basic_stack(){
+        $sql = "SELECT
+                    (order_id)
+                FROM
+                    `order_details` od
+                LEFT JOIN registries rg ON
+                    od.userid = rg.id  
+                LEFT JOIN lead_management lm ON
+                    od.email_id = lm.email      
+                WHERE
+                    DATE(lm.created) >= (CURDATE() - INTERVAL 90 DAY)  AND `program_type` = 1 AND od.email_id != '' AND od.email_id NOT IN(
+                    SELECT
+                        email_id
+                    FROM
+                        order_details
+                    WHERE
+                        `program_type` = 0
+                    GROUP BY
+                        od.email_id
+                ) AND od.email_id NOT IN(
+                    SELECT
+                        email
+                    FROM
+                        lead_action
+                    WHERE
+                        `assign_to` != ''
+                    GROUP BY
+                        email
+                )
+                GROUP BY
+                    od.email_id";
+                    
+        $query=$this->db->query($sql);
+                    
+        if($query->num_rows()>0){
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    
+    //Todays Task Query for calender:
+    public function get_task_calender($param){
+        
+        if($param==0){
+            $date_condition = " AND DATE(start_date)=CURDATE() ";
+        }elseif($param==1){
+            $monday = strtotime("last monday");
+            $monday = date('w', $monday)==date('w') ? $monday+7*86400 : $monday;
+            $sunday = strtotime(date("Y-m-d",$monday)." +6 days");
+            $this_week_sd = date("Y-m-d",$monday);
+            $this_week_ed = date("Y-m-d",$sunday);
+            
+            $date_condition = " AND DATE(start_date) BETWEEN '$this_week_sd' AND '$this_week_ed' ";
+        }else{
+            $date_condition = " ";
+        }
+        
+        $c_id = $this->session->balance_session['admin_id'];
+        /*CASE WHEN
+                    tm.email_id != '' THEN CONCAT(
+                        rg.first_name,
+                        ' ',
+                        rg.last_name,
+                        '<br>(',
+                        rg.phone,
+                        ')'
+                    ) ELSE tm.task_name
+                END AS task_name,*/
+        $sql = "SELECT tm.task_name,
+                tm.email_id,
+                tm.start_date,
+                tm.end_date,
+                tm.type,
+                CONCAT(rg.first_name, ' ', rg.last_name) AS NAME,
+                rg.phone
+                FROM
+                    `task_master` tm
+                LEFT JOIN registries rg ON
+                    tm.email_id = rg.email_id
+                WHERE
+                    created_by = '$c_id'  $date_condition
+                ORDER BY
+                    tm.`start_date` 
+                ASC";
+                
+                // echo $sql;exit;
+                    
+        $query=$this->db->query($sql);
+                    
+        if($query->num_rows()>0){
+            return $query->result_array();
+        }else{
+            return 0;
+        }
+    }
+    
+    
+    public function get_basic_stack_completed(){
+        $name = $this->session->balance_session['first_name'];
+        
+        $sql = "SELECT
+                    email,
+                    (
+                    SELECT
+                        DATE
+                    FROM
+                        order_details
+                    WHERE
+                        email_id = email
+                    GROUP BY
+                        email_id
+                ) AS DATE
+                FROM
+                    lead_action
+                WHERE
+                    assign_to = '$name' AND email IN(
+                    SELECT
+                        email_id
+                    FROM
+                        `order_details`
+                    WHERE
+                        `program_type` = 1 AND email_id != '' AND email_id NOT IN(
+                        SELECT
+                            email_id
+                        FROM
+                            order_details
+                        WHERE
+                            `program_type` = 0
+                        GROUP BY
+                            email_id
+                    ) AND DATE(date) >(CURDATE() - INTERVAL 90 DAY)
+                GROUP BY
+                    email_id)";
+                    
+        $query=$this->db->query($sql);
+                    
+        if($query->num_rows()>0){
+            return $query->result_array();
+        }else{
+            return 0;
+        }
+    }
+    
+    // FU  done today | mtd
+    /*public function get_fu_done($param){
+        $name = $this->session->balance_session['first_name'];
+        if($param==0){
+            $date_condition = " DATE(fu_date)=CURDATE() AND  ";
+        }elseif($param==1){
+            $date_condition = " DATE(fu_date) >=  DATE_FORMAT(CURDATE(), '%Y-%m-01') AND ";
+        }
+        
+        $sql = "SELECT
+                    la.id
+                FROM
+                    lead_action la
+                WHERE ".$date_condition." 
+                (assign_to='$name' OR fu_assigned='$name')
+                GROUP BY
+                    email";
+                    
+        // echo $sql;
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    */
+     public function get_fu_done($param){
+        $name = $this->session->balance_session['first_name'];
+        if($param==0){
+            $date_condition = " DATE(fu_date)=CURDATE() AND  ";
+        }elseif($param==1){
+            $date_condition = " DATE(fu_date) >=  DATE_FORMAT(CURDATE(), '%Y-%m-01') AND ";
+        }
+        
+        $sql = "SELECT
+                    la.id
+                FROM
+                    lead_action la
+                WHERE ".$date_condition." 
+                (assign_to='$name' OR fu_assigned='$name')
+                AND
+                la.email NOT IN(
+                    SELECT
+                        email_id
+                    FROM
+                        order_details
+                )
+                GROUP BY
+                    email";
+                    
+        // echo $sql;
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+   
+   //consultation done
+    /*public function get_consultation_done($param){
+        $name = $this->session->balance_session['first_name'];
+        if($param==0){
+            $date_condition = " DATE(key_insight_date)=CURDATE() AND  ";
+        }elseif($param==1){
+            $date_condition = " DATE(key_insight_date) >=  DATE_FORMAT(CURDATE(), '%Y-%m-01') AND ";
+        }
+        //$date_condition = " DATE(key_insight_date) >=  DATE_FORMAT(CURDATE(), '%Y-%m-01') AND ";
+        $sql = "SELECT
+                    la.id
+                FROM
+                    lead_action la
+                WHERE ".$date_condition." 
+                LCASE(assign_to)='".strtolower($name)."'
+                GROUP BY
+                    email";
+        //echo $sql;exit;
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    */
+    public function get_consultation_done($param){
+        $name = $this->session->balance_session['first_name'];
+        if($param==0){
+            $date_condition = " DATE(key_insight_date)=CURDATE() AND  ";
+        }elseif($param==1){
+            $date_condition = " DATE(key_insight_date) >=  DATE_FORMAT(CURDATE(), '%Y-%m-01') AND ";
+        }
+        
+        $sql = "SELECT
+                    la.id
+                FROM
+                    lead_action la
+                WHERE ".$date_condition." 
+                assign_to='$name'
+                AND
+                la.email NOT IN(
+                    SELECT
+                        email_id
+                    FROM
+                        order_details
+                )
+                GROUP BY
+                    email";
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }//Action assigned done
+    public function get_action_done($param){
+        $name = $this->session->balance_session['first_name'];
+        if($param==0){
+            $date_condition = " DATE(fu_date)=CURDATE() AND  ";
+        }elseif($param==1){
+            $date_condition = " DATE(fu_date) >=  DATE_FORMAT(CURDATE(), '%Y-%m-01') AND ";
+        }
+        
+        $sql = "SELECT
+                    la.id
+                FROM
+                    lead_action la
+                WHERE ".$date_condition." 
+                LCASE(fu_assigned) ='".strtolower($name)."' 
+                GROUP BY
+                    email";
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    
+    //status wise leads
+    public function get_lead_by_status(){
+        $name = $this->session->balance_session['first_name'];
+        
+        $sql = "SELECT
+                    status,count(lm.status) as c
+                FROM
+                    lead_management lm 
+                LEFT JOIN
+                    lead_action la
+                ON lm.email=la.email
+                WHERE la.assign_to='$name'
+                    AND lm.created > CURDATE() - INTERVAL 30 DAY 
+                    AND lm.email NOT IN( SELECT email_id FROM order_details WHERE program_status NOT IN(0,1,2,4) GROUP BY email_id) 
+                    AND status in (SELECT status_name FROM `bn_lead_status` where new_crm='1') 
+                    AND lm.email NOT IN(SELECT email_id
+                           FROM   order_details
+                           WHERE  program_status IN( 0, 1, 2, 4 ))
+                    AND lm.phone NOT IN(SELECT phone
+                               FROM   registries
+                               WHERE  user_status = 'Active')
+                GROUP BY lm.status";
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return ($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    public function get_lead_by_sub_status($status){
+        $name = $this->session->balance_session['first_name'];
+        
+        $sql = "SELECT
+                      status, sub_status, count(lm.sub_status) as cnt_sub_status
+                FROM
+                    lead_management lm 
+                LEFT JOIN
+                    lead_action la
+                ON lm.email=la.email
+                WHERE la.assign_to='$name'
+                    AND lm.created > CURDATE() - INTERVAL 30 DAY 
+                    AND lm.email NOT IN(SELECT email_id FROM order_details WHERE program_status NOT IN(0,1,2,4) GROUP BY email_id) 
+                    AND status in ('{$status}') 
+                    AND lm.email NOT IN(SELECT email_id
+                           FROM   order_details
+                           WHERE  program_status IN( 0, 1, 2, 4 ))
+                    AND lm.phone NOT IN(SELECT phone
+                               FROM   registries
+                               WHERE  user_status = 'Active')
+                  GROUP BY sub_status order by sub_status desc";
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return ($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    //stage wise leads
+    public function get_lead_by_stage(){
+        $name = $this->session->balance_session['first_name'];
+        
+        $sql = "SELECT
+                    lm.stage
+                FROM
+                    lead_management lm 
+                LEFT JOIN
+                    lead_action la
+                ON lm.email=la.email
+                WHERE LCASE(la.assign_to)='".strtolower($name)."'
+                AND lm.created > CURDATE() - INTERVAL 30 DAY 
+                AND lm.email NOT IN( SELECT email_id FROM order_details WHERE program_status NOT IN(0,1,2,4) GROUP BY email_id) 
+                GROUP BY lm.email";
+                
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return ($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    public function get_lead_by_phase(){
+        $name = $this->session->balance_session['first_name'];
+        
+        $sql = "SELECT
+                    lm.phase
+                FROM
+                    lead_management lm 
+                LEFT JOIN
+                    lead_action la
+                ON lm.email=la.email
+                WHERE LCASE(la.assign_to)='".strtolower($name)."'
+                AND lm.created > CURDATE() - INTERVAL 30 DAY 
+                AND lm.email NOT IN( SELECT email_id FROM order_details GROUP BY email_id) 
+                GROUP BY lm.email";
+                
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return ($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    public function get_query_count_query(){
+        $assigned_id = $this->session->balance_session['admin_id'];
+        $sql = "SELECT
+                    id
+                FROM
+                    `lead_enquiry`
+                WHERE
+                    msg_type = 0 AND read_status = 0 AND counsellor_id IN(
+                        $assigned_id,
+                        0
+                    )
+                GROUP BY
+                    user_id";
+                    
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    
+    /*public function get_calls_scheduled_count_query(){
+        $assigned_id = $this->session->balance_session['admin_id'];
+        $sql = "SELECT
+                    id
+                FROM
+                    `bn_consultation_call_booking`
+                WHERE
+                    call_status = 'pending' AND call_date > CURDATE() AND counsellor_id = $assigned_id";
+                    
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }*/
+    
+    public function get_fus_count_query(){
+        $assign_name  = $this->session->balance_session['first_name'];
+        $sql = "SELECT
+                    *
+                FROM
+                    `lead_action`
+                WHERE
+                    DATE(reminder_dt) = CURDATE() AND fu_assigned = '$assign_name'";
+                    
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    
+    public function get_reminders_set_count_query(){
+        $c_id  = $this->session->balance_session['admin_id'];
+        $sql = "SELECT
+                    *
+                FROM
+                    `mentor_reminders`
+                WHERE
+                    mentor_id = '$c_id' AND reminder_date = CURDATE()";
+                    
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            // return $query->result_array();
+            return $query->result_array();
+        }else{
+            return 0;
+        }
+    }
+    
+    public function get_reminder_schedule($c_id){
+        
+        $result = [];
+        if($c_id){
+            $sql = "SELECT
+                        email_id,
+                        task_name,
+                        description AS reminder_text,
+                        remind_me,
+                        start_date
+                    FROM
+                        task_master
+                    WHERE
+                        CAST(start_date AS DATE) = CURDATE() AND created_by = '$c_id'";
+            
+            $result = $this->db->query($sql)->result_array();
+        }
+        return $result;
+        
+    }
+    
+    public function get_call_reminder_schedule($c_id){
+        
+        $result = [];
+        if($c_id){
+            $sql = "SELECT
+                        bccb.id,
+                        lm.email as email_id,
+                        lm.phone,
+                        (CASE WHEN lm.fname!='' THEN CONCAT(lm.fname, ' ', lm.lname) ELSE lm.name END ) AS name,
+                        bccb.previous_status,
+                        bccb.call_status,
+                        bccb.call_date,
+                        bccb.time_slot,
+                        bccb.source
+                    FROM
+                        bn_consultation_call_booking bccb
+                    LEFT JOIN lead_management lm ON
+                        lm.id = bccb.lead_id
+                    WHERE
+                        bccb.call_date = CURDATE() AND counsellor_id = '$c_id'";
+            
+            $result = $this->db->query($sql)->result_array();
+        }
+        return $result;
+        
+    }
+    
+    public function get_today_fus_data_query($c_name){
+        $sql = "SELECT
+                    CONCAT(lm.fname, ' ', lm.lname) as name,
+                    lm.phone,
+                    la.email,
+                    la.key_insight,
+                    la.reminder_dt,
+                    CASE WHEN assign_to = '$c_name' THEN 'Set by you' WHEN fu_assigned = '$c_name' THEN CONCAT('Assigend by ', assign_to) ELSE 'NA'
+                END AS action_status
+                FROM
+                    lead_action la
+                LEFT JOIN lead_management lm ON
+                    lm.email = la.email
+                WHERE
+                    (DATE(reminder_dt) = CURDATE()) 
+                    AND
+                        DATE(fu_date) < DATE(reminder_dt)
+                    AND(
+                        assign_to = '$c_name' OR fu_assigned = '$c_name'
+                    )
+                    AND la.email NOT IN(
+                            SELECT
+                                email_id
+                            FROM
+                                order_details
+                            WHERE program_status IN(0,1,2,4)
+                        ) AND lm.phone NOT IN(
+                            SELECT
+                                mobile_no1
+                            FROM
+                                billing_details bl,order_details od
+                            WHERE bl.email_id=od.email_id and program_status IN(0,1,2,4)
+                        ) AND lm.phone NOT IN(
+                            SELECT
+                                phone
+                            FROM
+                                registries
+                            WHERE user_status='Active'
+                        )
+                GROUP BY
+                    lm.email";
+                    
+        $query=$this->db->query($sql);
+        
+        // echo $sql;
+        // exit;
+
+        if($query->num_rows()>0)
+        {
+            return $query->result_array();
+        }else{
+            return 0;
+        }
+    }
+    
+    public function get_today_fus_missed_data_query($c_name){
+        
+        $sql = "SELECT
+                    lm.fname,
+                    lm.phone,
+                    la.email,
+                    key_insight,
+                    fu_note,
+                    reminder_dt
+                FROM
+                    `lead_action` la,
+                    lead_management lm
+                WHERE
+                    lm.email = la.email AND(
+                        fu_assigned = '$c_name' OR assign_to = '$c_name'
+                    ) AND fu_date < reminder_dt AND DATE(reminder_dt) BETWEEN(CURDATE() - INTERVAL 30 DAY) AND(CURDATE() - INTERVAL 1 DAY)
+                    AND la.email NOT IN(
+                            SELECT
+                                email_id
+                            FROM
+                                order_details
+                            WHERE program_status IN(0,1,2,4)
+                        ) AND lm.phone NOT IN(
+                            SELECT
+                                mobile_no1
+                            FROM
+                                billing_details bl,order_details od
+                            WHERE bl.email_id=od.email_id and program_status IN(0,1,2,4)
+                        ) AND lm.phone NOT IN(
+                            SELECT
+                                phone
+                            FROM
+                                registries
+                            WHERE user_status='Active'
+                        )
+                GROUP BY
+                    la.email
+                ORDER BY
+                    la.`id`
+                DESC";
+                    
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return $query->result_array();
+        }else{
+            return 0;
+        }
+    }
+    
+    
+    public function get_today_consultation_calls_data_query($c_id){ 
+        
+        $sql =  "SELECT
+                    cb.id as id,
+                    CONCAT(lm.fname, ' ', lm.lname) AS name,
+                    lm.email as email_id,
+                    lm.phone,
+                    DATE_FORMAT(call_date, '%D %b %Y') as call_date,
+                    cb.call_status,
+                    cb.call_date,
+                    cb.time_slot
+                FROM
+                    `bn_consultation_call_booking` cb
+                LEFT JOIN lead_management lm ON
+                    cb.lead_id = lm.id
+                WHERE
+                    call_date = CURDATE() AND call_status IN('pending', 'reschedule') AND call_type='0' AND counsellor_id = '$c_id'
+                    AND lm.email NOT IN(
+                            SELECT
+                                email_id
+                            FROM
+                                order_details
+                            WHERE program_status IN(0,1,2,4)
+                        ) AND lm.phone NOT IN(
+                            SELECT
+                                mobile_no1
+                            FROM
+                                billing_details bl,order_details od
+                            WHERE bl.email_id=od.email_id and program_status IN(0,1,2,4)
+                        ) AND lm.phone NOT IN(
+                            SELECT
+                                phone
+                            FROM
+                                registries
+                            WHERE user_status='Active'
+                        )
+                ";
+                    
+        $query=$this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return $query->result_array();
+        }else{
+            return 0;
+        }
+    }
+    
+    
+    public function get_today_calls_miss_data_query($c_id){
+        error_reporting(0);
+        $c_name  = strtolower($this->session->balance_session['first_name']);
+        $sql1 =  "SELECT
+                    cb.id as id,
+                    CONCAT(lm.fname, ' ', lm.lname) AS name,
+                    lm.email as email_id,
+                    lm.phone,
+                    DATE_FORMAT(call_date, '%D %b %Y') as call_date,
+                    cb.call_status,
+                    cb.call_date,
+                    cb.time_slot
+                FROM
+                    `bn_consultation_call_booking` cb
+                LEFT JOIN lead_management lm ON
+                    cb.lead_id = lm.id
+                WHERE
+                    call_date < CURDATE() AND call_status IN('pending', 'reschedule') AND call_type=0 AND counsellor_id = '$c_id'
+                    AND lm.email NOT IN(
+                            SELECT
+                                email_id
+                            FROM
+                                order_details
+                            WHERE program_status IN(0,1,2,4) 
+                        ) AND lm.phone NOT IN(
+                            SELECT
+                                mobile_no1
+                            FROM
+                                billing_details bl,order_details od
+                            WHERE bl.email_id=od.email_id and program_status IN(0,1,2,4)
+                        ) AND lm.phone NOT IN(
+                            SELECT
+                                phone
+                            FROM
+                                registries
+                            WHERE user_status='Active'
+                        )";
+                    
+            $query = $this->db->query($sql1);
+        
+
+        if($query->num_rows()>0)
+        {
+            return $query->result_array();
+        }else{
+            return 0;
+        }
+        
+    }
+    
+    
+    public function today_task(){
+        $c_name  = $this->session->balance_session['first_name'];
+        $c_id  = $this->session->balance_session['admin_id'];
+        //$sql =  "SELECT * FROM `task_master` WHERE created_by=$c_id AND DATE(start_date)=CURDATE()";
+        $sql =  "SELECT CONCAT(task_name, ' (',email_id,') ') as task_name,DATE_FORMAT(start_date,'%H:%i') as start_date,DATE_FORMAT(end_date,'%H:%i') as end_date FROM `task_master` WHERE created_by=$c_id AND DATE(start_date)=CURDATE()";
+        
+        $query = $this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return ($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    
+    public function today_hot(){
+        $c_name  = $this->session->balance_session['first_name'];
+        $sql =  "SELECT ls.id 
+                    FROM `lead_status_log` ls 
+                    LEFT JOIN `lead_action` la ON ls.email=la.email
+                    LEFT JOIN `lead_management` lm ON ls.email=lm.email 
+                    WHERE lm.status='hot' AND ls.status='hot' AND DATE(ls.created)=CURDATE() 
+                        AND la.assign_date > (CURDATE() - INTERVAL 30 DAY) 
+                        AND LCASE(la.assign_to)='".strtolower($c_name)."' GROUP BY ls.email";
+        
+        $query = $this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    
+    public function today_sales(){
+        $c_name  = $this->session->balance_session['first_name'];
+        
+        $sql = "select count(order_id) as unit, sum(prog_buy_amt) as amt from order_details where email_id in (select email from lead_action where assign_to='$c_name' and assign_date > (CURDATE() - INTERVAL 30 DAY) ) AND order_type !='Renewal' AND prog_buy_amt!=0 AND DATE(date)=CURDATE()";
+        
+        $query = $this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return $query->result_array();
+        }else{
+            return 0;
+        }
+    }
+    
+    // performance analysis - sales funnel
+    public function get_sales_funnel_lead($param,$name = false,$pervious_month=false, $date_filter=false){
+        $date_filter_val = "";
+        if(!empty(@$date_filter)){
+            if($date_filter['month']!="" && $date_filter['month']!="-1"){
+                if($date_filter['year']!=""){
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+                }else{
+                    $date_filter['year'] = date("Y");
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+
+                }
+            }else{
+                if($date_filter['year']!=""){
+                    //$date_filter_val = " AND YEAR(assign_date) = {$date_filter['year']} ";
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%-%') ";
+                }else{
+                    $date_filter_val = ' and DATE(assign_date)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+                }
+            }
+        }else{
+            $date_filter_val = ' and DATE(assign_date)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+        }
+        //echo $date_filter_val;die;
+        $c_name = $name;
+        if($pervious_month==true){
+            //die;
+            if(date('m')==1){
+                $month = 12;
+                $year = date('Y')-1;
+            }else{
+                $month = date('m')-1;
+                $year = date('Y');
+            }
+            if($param == 0){
+                $sql = "SELECT id FROM `lead_action` where LCASE(assign_to) IN ('".strtolower($c_name)."') and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01')"; 
+            }else {
+                $sql = "SELECT id FROM `lead_action` where LCASE(assign_to) NOT IN('".strtolower($c_name)."','') and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01')";
+            }
+        }else{
+            if($param == 0){
+                $sql = "SELECT id FROM `lead_action` where LCASE(assign_to)IN ('".strtolower($c_name)."') ".$date_filter_val;    
+            }else {
+                $sql = "SELECT id FROM `lead_action` where LCASE(assign_to) NOT IN('".strtolower($c_name)."','') ".$date_filter_val;
+            }
+        }
+        
+        //echo $sql;die;
+        $query = $this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    
+    public function get_sales_funnel_consultation($param,$name = false,$pervious_month=false, $date_filter=false){
+        //$c_name  = $this->session->balance_session['first_name'];
+        $date_filter_val = "";
+        if(!empty(@$date_filter)){
+            if($date_filter['month']!="" && $date_filter['month']!="-1"){
+                if($date_filter['year']!=""){
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+                }else{
+                    $date_filter['year'] = date("Y");
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+
+                }
+            }else{
+                if($date_filter['year']!=""){
+                    //$date_filter_val = " AND YEAR(assign_date) = {$date_filter['year']} ";
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%-%') ";
+                }else{
+                    $date_filter_val = ' and DATE(assign_date)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+                }
+            }
+        }else{
+            $date_filter_val = ' and DATE(assign_date)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+        }
+        $c_name = $name;
+        if($pervious_month==true){
+            //die;
+            if(date('m')==1){
+                $month = 12;
+                $year = date('Y')-1;
+            }else{
+                $month = date('m')-1;
+                $year = date('Y');
+            }
+            if($param == 0){
+                $sql = "SELECT id FROM `lead_action` where key_insight!='' AND LCASE(assign_to) IN ('".strtolower($c_name)."') and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01')";
+            }else {
+                $sql = "SELECT id FROM `lead_action` where key_insight!='' AND LCASE(assign_to) NOT IN('".strtolower($c_name)."','') and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01')";
+            }
+        }else{
+            if($param == 0){
+                $sql = "SELECT id FROM `lead_action` where key_insight!='' AND LCASE(assign_to) IN ('".strtolower($c_name)."') ".$date_filter_val;
+            }else {
+                $sql = "SELECT id FROM `lead_action` where key_insight!='' AND LCASE(assign_to) NOT IN('".strtolower($c_name)."','') ".$date_filter_val;
+            }
+        }
+        
+        
+        $query = $this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    
+    public function get_sales_funnel_warm($param,$name = false,$pervious_month=false, $date_filter=false){
+        //$c_name  = $this->session->balance_session['first_name'];
+        $date_filter_val = "";
+        if(!empty(@$date_filter)){
+            if($date_filter['month']!="" && $date_filter['month']!="-1"){
+                if($date_filter['year']!=""){
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+                }else{
+                    $date_filter['year'] = date("Y");
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+
+                }
+            }else{
+                if($date_filter['year']!=""){
+                    //$date_filter_val = " AND YEAR(assign_date) = {$date_filter['year']} ";
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%-%') ";
+                }else{
+                    $date_filter_val = ' and DATE(assign_date)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+                }
+            }
+        }else{
+            $date_filter_val = ' and DATE(assign_date)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+        }
+        $c_name = $name;
+        if($pervious_month==true){
+            //die;
+            if(date('m')==1){
+                $month = 12;
+                $year = date('Y')-1;
+            }else{
+                $month = date('m')-1;
+                $year = date('Y');
+            }
+            if($param == 0){
+                $sql = "SELECT lm.id FROM `lead_management` lm LEFT JOIN lead_action la ON lm.email=la.email where status='Warm' AND LCASE(assign_to) IN ('".strtolower($c_name)."') and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01') ORDER BY `id` DESC";
+            }else {
+                $sql = "SELECT lm.id FROM `lead_management` lm LEFT JOIN lead_action la ON lm.email=la.email where status='Warm' AND LCASE(assign_to) NOT IN('".strtolower($c_name)."','') and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01') ORDER BY `id` DESC";
+            }
+        }else{
+            if($param == 0){
+                $sql = "SELECT lm.id FROM `lead_management` lm LEFT JOIN lead_action la ON lm.email=la.email where status='Warm' AND LCASE(assign_to) IN ('".strtolower($c_name)."') ".$date_filter_val;
+            }else {
+                $sql = "SELECT lm.id FROM `lead_management` lm LEFT JOIN lead_action la ON lm.email=la.email where status='Warm' AND LCASE(assign_to) NOT IN('".strtolower($c_name)."','') ".$date_filter_val;
+            }
+        }
+        
+        
+        $query = $this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    
+    public function get_sales_funnel_hot($param,$name = false,$pervious_month=false, $date_filter=false){
+        //$c_name  = $this->session->balance_session['first_name'];
+        $date_filter_val = "";
+        if(!empty(@$date_filter)){
+            if($date_filter['month']!="" && $date_filter['month']!="-1"){
+                if($date_filter['year']!=""){
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+                }else{
+                    $date_filter['year'] = date("Y");
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+
+                }
+            }else{
+                if($date_filter['year']!=""){
+                    //$date_filter_val = " AND YEAR(assign_date) = {$date_filter['year']} ";
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%-%') ";
+                }else{
+                    $date_filter_val = ' and DATE(assign_date)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+                }
+            }
+        }else{
+            $date_filter_val = ' and DATE(assign_date)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+        }
+        $c_name = $name;
+        if($pervious_month==true){
+            //die;
+            if(date('m')==1){
+                $month = 12;
+                $year = date('Y')-1;
+            }else{
+                $month = date('m')-1;
+                $year = date('Y');
+            }
+            
+            if($param == 0){
+                $sql = "SELECT lm.id FROM `lead_management` lm LEFT JOIN lead_action la ON lm.email=la.email where status='Hot' AND LCASE(assign_to) IN ('".strtolower($c_name)."') and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01') ORDER BY `id` DESC";
+            }else {
+                $sql = "SELECT lm.id FROM `lead_management` lm LEFT JOIN lead_action la ON lm.email=la.email where status='Hot' AND LCASE(assign_to) NOT IN('".strtolower($c_name)."','') and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01') ORDER BY `id` DESC";
+            }
+        }else{
+            if($param == 0){
+                $sql = "SELECT lm.id FROM `lead_management` lm LEFT JOIN lead_action la ON lm.email=la.email where status='Hot' AND LCASE(assign_to) IN ('".strtolower($c_name)."') ".$date_filter_val;
+            }else {
+                $sql = "SELECT lm.id FROM `lead_management` lm LEFT JOIN lead_action la ON lm.email=la.email where status='Hot' AND LCASE(assign_to) NOT IN('".strtolower($c_name)."','') ".$date_filter_val;
+            }
+        }
+        
+        
+        $query = $this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return count($query->result_array());
+        }else{
+            return 0;
+        }
+    }
+    
+    public function get_sales_funnel_sales($param,$name = false,$pervious_month=false, $date_filter=false){
+        //$c_name  = $this->session->balance_session['first_name'];
+        $date_filter_val = "";
+        if(!empty(@$date_filter)){
+            if($date_filter['month']!="" && $date_filter['month']!="-1"){
+                if($date_filter['year']!=""){
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " and DATE(DATE)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+                }else{
+                    $date_filter['year'] = date("Y");
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " and DATE(DATE)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+
+                }
+            }else{
+                if($date_filter['year']!=""){
+                    //$date_filter_val = " AND YEAR(assign_date) = {$date_filter['year']} ";
+                    $date_filter_val = " and DATE(DATE)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%-%') ";
+                }else{
+                    $date_filter_val = ' and DATE(DATE)>=DATE_FORMAT(CURDATE(), "%Y-%m-01")';
+                }
+            }
+        }else{
+            $date_filter_val = ' and DATE(DATE)>=DATE_FORMAT(CURDATE(), "%Y-%m-01")';
+        }
+        $c_name = $name;
+        if($pervious_month==true){
+            //die;
+            if(date('m')==1){
+                $month = 12;
+                $year = date('Y')-1;
+            }else{
+                $month = date('m')-1;
+                $year = date('Y');
+            }
+            if($param == 0){
+                $sql = "select count(order_id) as unit, sum(prog_buy_amt) as amt from order_details where order_type != 'Renewal' AND email_id in (select email from lead_action where LCASE(assign_to) IN ('".strtolower($c_name)."') and assign_date > (CURDATE() - INTERVAL 30 DAY) ) AND DATE(date)>=DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01')";
+            }else {
+                $sql = "SELECT
+                            COUNT(order_id) AS unit,
+                            SUM(prog_buy_amt) AS amt
+                        FROM
+                            order_details
+                        WHERE
+                            DATE(DATE) >= DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01')";
+            }
+        }else{
+            if($param == 0){
+                $sql = "select count(order_id) as unit, sum(prog_buy_amt) as amt from order_details where order_type != 'Renewal' AND email_id in (select email from lead_action where LCASE(assign_to) IN ('".strtolower($c_name)."')  and assign_date > (CURDATE() - INTERVAL 30 DAY) ) AND prog_buy_amt !=0 ".$date_filter_val." GROUP BY email_id";
+                //  AND DATE(date)>=DATE_FORMAT(CURDATE(), '%Y-%m-01')";
+            }else {
+                $sql = "SELECT
+                            COUNT(order_id) AS unit,
+                            SUM(prog_buy_amt) AS amt
+                        FROM
+                            order_details
+                        WHERE
+                            1 AND prog_buy_amt !=0 ".$date_filter_val." GROUP BY email_id";
+            }
+        }
+        //echo $sql;die;
+        
+        $query = $this->db->query($sql);
+
+        $data = array();
+        if($query->num_rows()>0)
+        {
+            $res = $query->result_array();
+            $sum = 0;
+            $k=0;
+            foreach ($res as $key => $value) {
+
+                $sum = $sum+$value['amt'];
+                $k++;
+            }
+            $data[0]["amt"] = $sum;
+            $data[0]["unit"]= $k;
+            return $data;
+        }else{
+            return 0;
+        }
+    }
+    
+    public function get_month_sales_report($param,$first_name=false,$pervious_month=false, $date_filter=false){
+        $date_filter_val = "";
+        if(!empty(@$date_filter)){
+            if($date_filter['month']!="" && $date_filter['month']!="-1"){
+                if($date_filter['year']!=""){
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " DATE(DATE)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+                }else{
+                    $date_filter['year'] = date("Y");
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " DATE(DATE)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+
+                }
+            }else{
+                if($date_filter['year']!=""){
+                    //$date_filter_val = " AND YEAR(assign_date) = {$date_filter['year']} ";
+                    $date_filter_val = " DATE(DATE)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%-%') ";
+                }else{
+                    $date_filter_val = ' DATE(DATE)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+                }
+            }
+        }else{
+            $date_filter_val = ' DATE(DATE)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+        }
+        if($param == 1){    //Advance stack
+            $where_condition = " program_type='0' AND renewal_flag!='3' AND ";
+        }elseif($param == 2){   //Basic stack
+            $where_condition = " program_type='1' AND renewal_flag!='4' AND ";
+        }elseif($param == 3){   //Basic Renewal
+            $where_condition = " renewal_flag='4' AND ";
+        }elseif($param == 4){   //Basic to upgrade
+            $where_condition = " renewal_flag='3' AND ";
+        }else{
+            $where_condition = "";
+        }
+        $whrClause = "";
+        if($pervious_month==true){
+            //die;
+            if(date('m')==1){
+                $month = 12;
+                $year = date('Y')-1;
+            }else{
+                $month = date('m')-1;
+                $year = date('Y');
+            }
+            if($first_name!=false){
+                /*$sql = "select count(od.order_id) as unit, sum(od.prog_buy_amt) as amt from order_details as od
+                LEFT JOIN lead_action as ld ON (od.email_id = ld.email)
+                where ".$where_condition." od.order_type!='Renewal' AND DATE(od.date)>=DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01') and UPPER(ld.assign_to = '".strtoupper($first_name)."')";
+                */
+                $sql = "select count(order_id) as unit, sum(prog_buy_amt) as amt from order_details 
+                    where ".$where_condition." email_id in (
+                            select email from lead_action where LCASE(assign_to) IN ('".strtolower($first_name)."') 
+                            and assign_date > (CURDATE() - INTERVAL 30 DAY) ) 
+                            AND DATE(date)>=DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01')";
+            }else{
+                $sql = "select count(order_id) as unit, sum(prog_buy_amt) as amt from order_details where ".$where_condition." DATE(date)>=DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01') ";
+            }
+            
+        }else{
+            
+            if($first_name!=false){
+                /*$sql = "select count(od.order_id) as unit, sum(od.prog_buy_amt) as amt from order_details as od
+                LEFT JOIN lead_action as ld ON (od.email_id = ld.email)
+                where ".$where_condition." od.order_type!='Renewal' AND DATE(od.date)>=DATE_FORMAT(CURDATE(), '%Y-%m-01') and UPPER(ld.assign_to = '".strtoupper($first_name)."')";
+                */
+                $sql = "select count(order_id) as unit, sum(prog_buy_amt) as amt from order_details 
+                    where ".$where_condition." email_id in (
+                            select email from lead_action where LCASE(assign_to)IN ('".strtolower($first_name)."') 
+                            and assign_date > (CURDATE() - INTERVAL 30 DAY) ) AND
+                            ".$date_filter_val;
+                            //echo $sql;die;
+            }else{
+                $sql = "select count(order_id) as unit, sum(prog_buy_amt) as amt from order_details where ".$where_condition." ".$date_filter_val;
+
+            }
+        }
+        
+        
+        $query = $this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return $query->result_array();
+        }else{
+            return 0;
+        }
+    }
+    
+    public function get_goal_set(){
+        $c_id  = $this->session->balance_session['admin_id'];
+        //Goal set 
+        $sql = "SELECT sale_goal,unit_goal FROM `admin_user` where  admin_id = '$c_id'";
+        
+        $query = $this->db->query($sql);
+
+        if($query->num_rows()>0)
+        {
+            return $query->result_array();
+        }else{
+            return 0;
+        }
+    }
+    
+    public function get_balance_data($param){
+        $c_name  = $this->session->balance_session['first_name'];
+        if($param == "due"){
+            $sql = "SELECT
+                    CONCAT(rg.first_name, ' ', rg.last_name) AS full_name,
+                    rg.email_id,
+                    rg.id,
+                    rg.phone,
+                    od.balance,
+                    od.program_name,
+                    rg.user_status,
+                    au.first_name AS mentor
+                FROM
+                    `order_details` od
+                LEFT JOIN registries rg ON
+                    od.userid = rg.id
+                LEFT JOIN admin_user au ON
+                    rg.mentor_id = au.admin_id
+                LEFT JOIN billing_details bd ON
+                    rg.id = bd.user_id
+                WHERE
+                    od.email_id in (select email from lead_action where LCASE(assign_to)='".strtolower($c_name)."') AND (
+                        od.balance IS NOT NULL AND od.balance != '' AND od.balance > 0
+                    ) AND DATE(od.bal_due_date) = CURDATE()";
+                    
+        }else{
+            $sql = "SELECT
+                    CONCAT(rg.first_name, ' ', rg.last_name) AS full_name,
+                    rg.email_id,
+                    rg.id,
+                    rg.phone,
+                    od.balance,
+                    od.bal_due_date,
+                    od.program_name,
+                    rg.user_status,
+                    au.first_name AS mentor
+                FROM
+                    `order_details` od
+                LEFT JOIN registries rg ON
+                    od.userid = rg.id
+                LEFT JOIN admin_user au ON
+                    rg.mentor_id = au.admin_id
+                LEFT JOIN billing_details bd ON
+                    rg.id = bd.user_id
+                WHERE
+                    od.email_id in (select email from lead_action where LCASE(assign_to)='".strtolower($c_name)."') AND (
+                        od.balance IS NOT NULL AND od.balance != '' AND od.balance > 0
+                    ) AND DATE(od.bal_due_date) < CURDATE() AND rg.user_status NOT IN ('fs','dropout')";
+        }
+        
+        $sql = $this->db->query($sql);
+        
+        if($sql->num_rows() > 0)
+        {
+           return $sql->result_array();
+        }        
+        else{
+            return 0;
+        }
+    }
+    
+    public function get_lead_conversion($param,$user,$pervious_month=false,$name = false, $date_filter=false){
+        if(!empty(@$date_filter)){
+            if($date_filter['month']!="" && $date_filter['month']!="-1"){
+                if($date_filter['year']!=""){
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " DATE(lm.created)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+                }else{
+                    $date_filter['year'] = date("Y");
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " DATE(lm.created)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+
+                }
+            }else{
+                if($date_filter['year']!=""){
+                    //$date_filter_val = " AND YEAR(assign_date) = {$date_filter['year']} ";
+                    $date_filter_val = " DATE(lm.created)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%-%') ";
+                }else{
+                    $date_filter_val = ' DATE(lm.created)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+                }
+            }
+        }else{
+            $date_filter_val = ' DATE(lm.created)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+        }
+        $c_name  = $name;
+        
+        if($param==1){ // Lead to sale
+            $where_condition = " ";
+        }if($param==2){ // Hot to sale
+            $where_condition = " lm.status='Hot' AND ";
+        }elseif($param==3){ // Warm to sale
+            $where_condition = " lm.status='Warm' AND ";
+        }elseif($param==4){ // Consultation to sale
+            $where_condition = " la.key_insight!='' AND ";
+        }
+        if($user==1){$user_condition = " LCASE(la.assign_to) IN ('".strtolower($c_name)."') AND "; }
+        else{$user_condition = " LCASE(la.assign_to) NOT IN ('".strtolower($c_name)."','') AND "; }
+        if($pervious_month==true){
+            //die;
+            if(date('m')==1){
+                $month = 12;
+                $year = date('Y')-1;
+            }else{
+                $month = date('m')-1;
+                $year = date('Y');
+            }
+            
+            $sql = "select lm.email from lead_management lm LEFT JOIN lead_action la ON lm.email=la.email where ".$where_condition.$user_condition.$date_filter_val." GROUP BY lm.email";
+        }else{
+            $sql = "select lm.email from lead_management lm LEFT JOIN lead_action la ON lm.email=la.email where ".$where_condition.$user_condition.$date_filter_val." GROUP BY lm.email";
+        }
+        
+        
+        $query = $this->db->query($sql);
+        
+        if($query->num_rows() > 0)
+        {
+           return count($query->result_array());
+        }        
+        else{
+            return 0;
+        }
+    }
+    
+    
+    public function get_sales_conversion($param,$user,$pervious_month=false,$name = false, $date_filter=false){
+        if(!empty(@$date_filter)){
+            if($date_filter['month']!="" && $date_filter['month']!="-1"){
+                if($date_filter['year']!=""){
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " DATE(lm.created)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+                }else{
+                    $date_filter['year'] = date("Y");
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " DATE(lm.created)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+
+                }
+            }else{
+                if($date_filter['year']!=""){
+                    //$date_filter_val = " AND YEAR(assign_date) = {$date_filter['year']} ";
+                    $date_filter_val = " DATE(lm.created)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%-%') ";
+                }else{
+                    $date_filter_val = ' DATE(lm.created)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+                }
+            }
+        }else{
+            $date_filter_val = ' DATE(lm.created)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+        }
+        $c_name  = $name;
+        
+        if($param==1){ // Lead to sale
+            $where_condition = " ";
+        }if($param==2){ // Hot to sale
+            $where_condition = " lm.status='Hot' AND ";
+        }elseif($param==3){ // Warm to sale
+            $where_condition = " lm.status='Warm' AND ";
+        }elseif($param==4){ // Consultation to sale
+            $where_condition = " la.key_insight!='' AND ";
+        }
+        if($user==1){$user_condition = " LCASE(la.assign_to) IN ('".strtolower($c_name)."') AND "; }
+        else{$user_condition = " LCASE(la.assign_to) NOT IN ('".strtolower($c_name)."','') AND "; }
+        
+        if($pervious_month==true){
+            //die;
+            if(date('m')==1){
+                $month = 12;
+                $year = date('Y')-1;
+            }else{
+                $month = date('m')-1;
+                $year = date('Y');
+            }
+            /*$sql = "SELECT
+                    order_id
+                FROM
+                    order_details od
+                LEFT JOIN lead_management lm ON
+                    od.email_id = lm.email
+                LEFT JOIN lead_action la ON
+                    od.email_id = lm.email WHERE".$where_condition.$user_condition." DATE(lm.created)>=DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01') GROUP BY lm.email";*/
+            $sql = "select 
+                        lm.email 
+                    from 
+                        lead_management lm 
+                    LEFT JOIN lead_action la ON 
+                        lm.email=la.email 
+                    INNER JOIN order_details od ON 
+                        od.email_id = lm.email 
+                    where   
+                        ".$where_condition.$user_condition." 
+                        DATE(lm.created)>=DATE_FORMAT(CURDATE(), '%Y-%m-01') GROUP BY lm.email";
+        }else{
+            /*$sql = "SELECT
+                    order_id
+                FROM
+                    order_details od
+                LEFT JOIN lead_management lm ON
+                    od.email_id = lm.email
+                LEFT JOIN lead_action la ON
+                    od.email_id = lm.email WHERE".$where_condition.$user_condition." DATE(lm.created)>=DATE_FORMAT(CURDATE(), '%Y-%m-01') GROUP BY lm.email";*/
+            $sql = "select 
+                        lm.email 
+                    from 
+                        lead_management lm 
+                    LEFT JOIN lead_action la ON 
+                        lm.email=la.email 
+                    INNER JOIN order_details od ON 
+                        od.email_id = lm.email 
+                    where   
+                        ".$where_condition.$user_condition.$date_filter_val." GROUP BY lm.email";
+
+        }
+        
+        
+        // echo $sql;
+        $query = $this->db->query($sql);
+        
+        if($query->num_rows() > 0)
+        {
+           return count($query->result_array());
+        }        
+        else{
+            return 0;
+        }
+    }
+    
+    public function get_Avg_Calls($yours,$c_name = false, $pervious_month = false, $date_filter=false){
+        
+        //$c_name  = $this->session->balance_session['first_name'];
+        $date_filter_val = "";
+        if(!empty(@$date_filter)){
+            if($date_filter['month']!="" && $date_filter['month']!="-1"){
+                if($date_filter['year']!=""){
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+                }else{
+                    $date_filter['year'] = date("Y");
+                    $month_val = $date_filter['month'];
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%{$month_val}-01') ";
+
+                }
+            }else{
+                if($date_filter['year']!=""){
+                    //$date_filter_val = " AND YEAR(assign_date) = {$date_filter['year']} ";
+                    $date_filter_val = " and DATE(assign_date)>=DATE_FORMAT(CURDATE(), '%{$date_filter['year']}-%-%') ";
+                }else{
+                    $date_filter_val = ' and DATE(assign_date)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+                }
+            }
+        }else{
+            $date_filter_val = ' and DATE(assign_date)>=DATE_FORMAT(CURDATE(), "%{Y}-%{m}-01")';
+        }
+        if($yours=='0'){
+            $where = " assign_to IN ('$c_name') AND ";
+        }else{
+            $where = '';
+        }
+        if($pervious_month=='1'){
+            //die;
+            if(date('m')==1){
+                $month = 12;
+                $year = date('Y')-1;
+            }else{
+                $month = date('m')-1;
+                $year = date('Y');
+            }
+            $sql = "SELECT
+                    SUM(fu_count) as fu_count,
+                    SUM(CASE WHEN key_insight != '' THEN 1 ELSE 0
+                END) AS key_insight
+                FROM
+                    `lead_action`
+                WHERE
+                     ".$where." (fu_count > 0 OR key_insight != '') AND assign_date >= DATE_FORMAT(CURDATE(), '%{$year}-%{$month}-01')
+                ORDER BY
+                    `id`
+                DESC";
+        }else{
+            $sql = "SELECT
+                    SUM(fu_count) as fu_count,
+                    SUM(CASE WHEN key_insight != '' THEN 1 ELSE 0
+                END) AS key_insight
+                FROM
+                    `lead_action`
+                WHERE
+                     ".$where." (fu_count > 0 OR key_insight != '') ".$date_filter_val."
+                ORDER BY
+                    `id`
+                DESC";
+        }
+        // echo $sql;
+        $query = $this->db->query($sql);
+        
+        if($query->num_rows() > 0)
+        {
+           return $query->result_array();
+        }        
+        else{
+            return 0;
+        }
+        
+    }
+    
+    public function get_source_name(){
+        $sql = "SELECT
+            CONCAT(
+                'Prime Source (',
+                (
+                SELECT
+                    GROUP_CONCAT(source_name)
+                FROM
+                    bn_lead_source
+                WHERE
+                    source_group = 1
+            ),
+            ')'
+            ) AS prime_source,
+            CONCAT(
+                'Social Media (',
+                (
+                SELECT
+                    GROUP_CONCAT(source_name)
+                FROM
+                    bn_lead_source
+                WHERE
+                    source_group = 2
+            ),
+            ')'
+            ) AS social_media,
+            CONCAT(
+                'Web (',
+                (
+                SELECT
+                    GROUP_CONCAT(source_name)
+                FROM
+                    bn_lead_source
+                WHERE
+                    source_group = 6
+            ),
+            ')'
+            ) AS web, ('Health Score (Web & App)') AS health_score,
+            ('Paid Adds (Google,Facebook)') AS paid_adds,
+            ('Registration') AS Registration,
+            CONCAT(
+                'Other (',
+                (
+                SELECT
+                    GROUP_CONCAT(source_name)
+                FROM
+                    bn_lead_source
+                WHERE
+                    source_group = 5
+            ),
+            ')'
+            ) AS other
+        FROM
+            `bn_lead_source` limit 1";
+        $query = $this->db->query($sql);
+        
+        if($query->num_rows() > 0)
+        {
+           return $query->result_array();
+        }        
+        else{
+            return 0;
+        }
+    }
+    /*public function get_source_conversion($param){
+        $c_name  = $this->session->balance_session['first_name'];
+        $sql = "SELECT
+                COUNT(order_id) AS unit,
+                SUM(prog_buy_amt) AS amt
+            FROM
+                order_details
+            WHERE
+                email_id IN(
+                SELECT
+                    lm.email
+                FROM
+                    lead_management lm LEFT JOIN lead_action la ON lm.email=la.email
+                WHERE
+                    la.assign_to = '".$c_name."'
+                    AND lm.enquiry_from IN(
+                    SELECT
+                        source_name
+                    FROM
+                        bn_lead_source
+                    WHERE
+                        source_group = $param
+                ) AND DATE(created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                AND DATE(assign_date) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+            ) AND DATE(date) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')";
+            
+        //echo $sql."<br><br>";    //exit;
+        $query = $this->db->query($sql);
+        
+        if($query->num_rows() > 0)
+        {
+           return $query->result_array();
+        }        
+        else{
+            return 0;
+        }
+    }*/
+    public function get_source_conversion($param, $name = false, $yours=false){
+        $c_name  = $name;
+        $whr = "";
+        if($yours==true){
+            $whr = " la.assign_to IN ( '".$c_name."' ) AND ";
+        }else{
+            $whr = "";
+        }
+        
+        $sql = "SELECT
+                COUNT(order_id) AS unit,
+                SUM(prog_buy_amt) AS amt
+            FROM
+                order_details
+            WHERE
+                email_id IN(
+                SELECT
+                    lm.email
+                FROM
+                    lead_management lm LEFT JOIN lead_action la ON lm.email=la.email
+                WHERE ".$whr."
+                     lm.enquiry_from IN(
+                    SELECT
+                        source_name
+                    FROM
+                        bn_lead_source
+                    WHERE
+                        source_group = $param
+                ) AND DATE(created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                AND DATE(assign_date) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+            ) AND DATE(date) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')";
+            
+        //echo $sql."<br><br>";    exit;
+        $query = $this->db->query($sql);
+        
+        if($query->num_rows() > 0)
+        {
+           return $query->result_array();
+        }        
+        else{
+            return 0;
+        }
+    }
+
+    public function get_source_lead_overall_your($param, $name = false, $yours=false){
+        $c_name  = $name;
+        $whr = "";
+        if($yours==true){
+            $whr = " la.assign_to IN ('".$c_name."') AND ";
+        }else{
+            $whr = "";
+        }
+        
+        $sql = "SELECT
+                    COUNT(lm.email) as cnt
+                FROM
+                    lead_management lm LEFT JOIN lead_action la ON lm.email=la.email
+                WHERE 
+                    ".$whr."
+                    lm.enquiry_from IN(
+                    SELECT
+                        source_name
+                    FROM
+                        bn_lead_source
+                    WHERE
+                        source_group = $param
+                ) AND DATE(created) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                AND DATE(assign_date) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+            AND (phone !='' AND LENGTH(phone) > 4)";
+
+            
+        //echo $sql."<br><br>";    exit;
+        $query = $this->db->query($sql);
+        
+        if($query->num_rows() > 0)
+        {
+           return $query->result_array();
+        }        
+        else{
+            return 0;
+        }
+    }
+    public function get_consolerlist(){
+        $sql = "SELECT
+                    first_name, fullname,email_id,full_name
+                FROM
+                    admin_user
+                WHERE 
+                    lower(as_counsellor) = 'yes' and user_status = 'active'
+                GROUP BY email_id ";
+
+            
+        //echo $sql."<br><br>";    exit;
+        $query = $this->db->query($sql);
+        
+        if($query->num_rows() > 0)
+        {
+           return $query->result_array();
+        }        
+        else{
+            return 0;
+        }
+    }
+    public function get_unit_list($today_sales=false){
+        $c_name = $this->session->balance_session['first_name'];
+
+        if($today_sales!=false){
+            $today_da = date('Y-m-d');
+            $sql = "SELECT rg.first_name, rg.last_name, od.email_id, prog_buy_amt AS amt, od.program_name
+                FROM order_details  as od
+                LEFT JOIN `registries` AS rg ON rg.email_id = od.email_id
+                WHERE 
+                    order_type != 'Renewal' 
+                    AND prog_buy_amt !=0 
+                    AND  od.email_id IN (SELECT email FROM lead_action WHERE LCASE(assign_to) IN ('{$c_name}') AND assign_date > (CURDATE() - INTERVAL 30 DAY) ) 
+                AND DATE(DATE)>=DATE_FORMAT(CURDATE(), '$today_da') GROUP BY email_id";
+        }else{
+            $sql = "SELECT rg.first_name, rg.last_name, od.email_id, prog_buy_amt AS amt, od.program_name
+                FROM order_details  as od
+                LEFT JOIN `registries` AS rg ON rg.email_id = od.email_id
+                WHERE 
+                    order_type != 'Renewal' 
+                    AND prog_buy_amt !=0 
+                    AND  od.email_id IN (SELECT email FROM lead_action WHERE LCASE(assign_to) IN ('{$c_name}') AND assign_date > (CURDATE() - INTERVAL 30 DAY) ) 
+                AND DATE(DATE)>=DATE_FORMAT(CURDATE(), '%Y-%m-01') GROUP BY email_id";
+        }
+        
+                
+
+            
+        //echo $sql."<br><br>";    exit;
+        $query = $this->db->query($sql);
+        
+        if($query->num_rows() > 0)
+        {
+           return $query->result_array();
+        }        
+        else{
+            return 0;
+        }
+    }
+    
+}
